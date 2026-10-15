@@ -1,0 +1,53 @@
+@keyframes busmap-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+#busmap-container #spinnerImage {
+    animation: busmap-spin 1s linear infinite !important;
+}
+
+#busmap-container .dropdown-item:hover {
+    background-color: #f0f0f0 !important;
+}
+
+#busmap-container button {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    padding: 10px 15px !important;
+
+    background-color: #fff !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 4px !important;
+
+    text-align: left !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+}
+
+#busmap-container button:hover {
+    background-color: #f8f9fa !important;
+    border-color: #adb5bd !important;
+}
+
+#busmap-container #btnModificaTratta,
+#busmap-container #btnResetMap {
+    display: inline-block !important;
+    width: auto !important;
+    text-align: center !important;
+}
+
+.color-dot {
+    flex-shrink: 0 !important;
+    width: 12px !important;
+    height: 12px !important;
+
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    border-radius: 50% !important;
+}

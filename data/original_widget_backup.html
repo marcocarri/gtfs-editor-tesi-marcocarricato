@@ -1,0 +1,1207 @@
+<div id="busmap-container" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; color: #333 !important; background-color: #fff !important; padding: 6px 15px 15px !important; line-height: 1.5 !important; position: relative !important; min-height: 400px !important; overflow: auto !important;">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.8); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(2px);">
+        <img src="https://www.snap4city.org/drupal/sites/default/files/styles/thumbnail/public/pictures/picture-120-1547486581.png"
+             alt="Loading..." id="spinnerImage" style="width: 50px; height: 50px;">
+    </div>
+
+
+    <!-- Edit Mode Panel -->
+    <div id="editPanel" style="display: none; padding: 8px 14px !important; border: 1px solid #ffc107 !important; background-color: #fffdf0 !important; border-radius: 6px !important; margin-top: 6px !important;">
+        <div style="display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; margin-bottom: 6px !important; flex-wrap: wrap !important;">
+            <div style="display: flex !important; align-items: baseline !important; gap: 6px !important;">
+                <span style="font-size: 0.95rem !important; font-weight: 600 !important; color: #444 !important;">Modify Trip</span>
+                <span style="font-size: 0.75rem !important; color: #888 !important;">Drag stops on the map</span>
+            </div>
+            <div style="display: flex !important; gap: 6px !important;">
+                <button id="btnSaveEdit" style="padding: 4px 12px !important; background-color: #28a745 !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-weight: 600 !important; font-size: 0.8rem !important; white-space: nowrap !important;">Save JSON</button>
+                <button id="btnEsciModifica" style="padding: 4px 12px !important; background-color: #dc3545 !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-weight: 600 !important; font-size: 0.8rem !important; white-space: nowrap !important;">Exit</button>
+            </div>
+        </div>
+        <div id="editError" style="display: none !important; padding: 6px 10px !important; margin-bottom: 4px !important; background-color: #f8d7da !important; color: #721c24 !important; border: 1px solid #f5c6cb !important; border-radius: 4px !important; font-size: 0.8rem !important;"></div>
+        <ol id="editStopsList" style="margin: 0 !important; padding-left: 22px !important; display: flex !important; flex-direction: column !important; gap: 3px !important;"></ol>
+    </div>
+
+    <!-- Save / Export modal -->
+    <div id="saveModal" style="display: none; position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0,0,0,0.55) !important; z-index: 10000 !important; align-items: center !important; justify-content: center !important;">
+        <div style="background: #fff !important; border-radius: 8px !important; padding: 24px 36px !important; width: 90% !important; max-width: 700px !important; max-height: 80vh !important; display: flex !important; flex-direction: column !important; gap: 12px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.3) !important;">
+            <div style="display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                <h3 style="margin: 0 !important; font-size: 1.1rem !important; color: #333 !important;">Export Trip</h3>
+                <button id="btnCloseModal" style="background: none !important; border: none !important; font-size: 1.4rem !important; cursor: pointer !important; color: #666 !important; line-height: 1 !important;">×</button>
+            </div>
+            <pre id="saveJsonOutput" style="background: #f8f9fa !important; border: 1px solid #dee2e6 !important; border-radius: 4px !important; padding: 14px !important; font-size: 0.78rem !important; overflow: auto !important; flex: 1 !important; margin: 0 !important; white-space: pre !important; color: #212529 !important;"></pre>
+            <div style="display: flex !important; gap: 8px !important; justify-content: flex-end !important;">
+                <button id="btnCopyJson" style="padding: 7px 16px !important; background: #007bff !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-weight: 600 !important;">copy</button>
+                <button id="btnDownloadJson" style="padding: 7px 16px !important; background: #28a745 !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-weight: 600 !important;">Download .json</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Time Update Choice Modal -->
+    <div id="timeUpdateModal" style="display: none; position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0,0,0,0.45) !important; z-index: 10001 !important; align-items: center !important; justify-content: center !important;">
+        <div style="background: #fff !important; border-radius: 8px !important; padding: 20px 28px !important; width: 300px !important; display: flex !important; flex-direction: column !important; gap: 14px !important; box-shadow: 0 6px 24px rgba(0,0,0,0.25) !important;">
+            <p style="margin: 0 !important; font-size: 0.95rem !important; color: #333 !important; font-weight: 500 !important;">Update timetable for:</p>
+            <div style="display: flex !important; flex-direction: column !important; gap: 8px !important;">
+                <button id="btnTimeUpdateOnly" style="padding: 8px 14px !important; background: #007bff !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-weight: 600 !important; font-size: 0.85rem !important; text-align: center !important; justify-content: center !important;">Only this stop</button>
+                <button id="btnTimeUpdateAll" style="padding: 8px 14px !important; background: #6f42c1 !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-weight: 600 !important; font-size: 0.85rem !important; text-align: center !important; justify-content: center !important;">This and the following</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Radius selector -->
+    <div id="radiusRow" style="display: flex !important; flex-direction: column !important; gap: 3px !important; margin-bottom: 3px !important; font-size: 0.85rem !important; color: #555 !important;">
+        <div style="display: flex !important; align-items: center !important; gap: 8px !important;">
+            <label for="searchBarRadius" style="white-space: nowrap !important; font-weight: 500 !important;">Radius (m):</label>
+            <input type="number" id="searchBarRadius" value="200" min="50" max="2000" step="50" style="width: 75px !important; padding: 4px 6px !important; border: 1px solid #dee2e6 !important; border-radius: 4px !important; font-size: 0.85rem !important;">
+        </div>
+        <div id="actionButtonsRow" style="display: flex !important; gap: 8px !important;">
+            <button id="btnModificaTratta" disabled style="width: auto !important; padding: 6px 14px !important; background-color: #6c757d !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: not-allowed !important; font-weight: 500 !important; white-space: nowrap !important; opacity: 0.6 !important; font-size: 0.85rem !important;">Modify Trip</button>
+            <button id="btnResetMap" style="display: none !important; width: auto !important; padding: 6px 14px !important; background-color: #dc3545 !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-weight: 500 !important; white-space: nowrap !important; font-size: 0.85rem !important;">New search</button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div id="tabs" style="display: flex !important; cursor: pointer !important; margin: 0 !important; border-bottom: 1px solid #dee2e6 !important;">
+        <div id="tabTimetable" class="tab active" style="padding-left: 10px !important;padding-right: 10px !important;padding-top: 5px !important; background-color: #ffffff !important; border: 1px solid #dee2e6 !important; border-bottom: 1px solid #fff !important; border-radius: 6px 6px 0 0 !important; margin-right: 4px !important; font-weight: 600 !important; color: #007bff !important; position: relative !important; bottom: -1px !important;">Agency</div>
+        <div id="tabLines" class="tab" style="padding-left: 10px !important;padding-right: 10px !important;padding-top: 5px !important; background-color: #f8f9fa !important; border: 1px solid #dee2e6 !important; border-bottom: none !important; border-radius: 6px 6px 0 0 !important; margin-right: 4px !important; font-weight: 500 !important; color: #666 !important;">Lines</div>
+        <div id="tabTratte" class="tab" style="padding-left: 10px !important;padding-right: 10px !important;padding-top: 5px !important; background-color: #f8f9fa !important; border: 1px solid #dee2e6 !important; border-bottom: none !important; border-radius: 6px 6px 0 0 !important; margin-right: 4px !important; font-weight: 500 !important; color: #666 !important;">Trips</div>
+        <div id="tabFermate" class="tab" style="padding-left: 10px !important;padding-right: 10px !important;padding-top: 5px !important; background-color: #f8f9fa !important; border: 1px solid #dee2e6 !important; border-bottom: none !important; border-radius: 6px 6px 0 0 !important; margin-right: 4px !important; font-weight: 500 !important; color: #666 !important;">Stops</div>
+    </div>
+
+    <!-- Tab Contents -->
+    <div id="tabTimetableContent" class="tab-content active" style="display: block; margin: 0 !important; padding: 3px 12px 6px !important; border: 1px solid #dee2e6 !important; border-top: none !important; background-color: #fff !important; border-radius: 0 0 6px 6px !important;">
+        <div id="agencyInfo" style="display: none !important; padding: 8px 12px !important; margin-bottom: 8px !important; background-color: #e8f4fd !important; border-radius: 4px !important; font-size: 13px !important; color: #333 !important;"></div>
+        <div id="agenciesList" style="display: flex !important; flex-direction: column !important; gap: 6px !important;"></div>
+    </div>
+
+    <div id="tabLinesContent" class="tab-content" style="display: none; margin: 0 !important; padding: 3px 12px 6px !important; border: 1px solid #dee2e6 !important; border-top: none !important; background-color: #fff !important; border-radius: 0 0 6px 6px !important;">
+        <div id="linesInfo" style="display: none !important; padding: 8px 12px !important; margin-bottom: 8px !important; background-color: #e8f4fd !important; border-radius: 4px !important; font-size: 13px !important; color: #333 !important;"></div>
+        <div id="linesList" style="display: flex !important; flex-direction: column !important; gap: 6px !important;"></div>
+    </div>
+
+    <div id="tabTratteContent" class="tab-content" style="display: none; margin: 0 !important; padding: 3px 12px 6px !important; border: 1px solid #dee2e6 !important; border-top: none !important; background-color: #fff !important; border-radius: 0 0 6px 6px !important;">
+        <div id="tratteInfo" style="display: none !important; padding: 8px 12px !important; margin-bottom: 8px !important; background-color: #e8f4fd !important; border-radius: 4px !important; font-size: 13px !important; color: #333 !important;"></div>
+        <div id="tratteList" style="display: flex !important; flex-direction: column !important; gap: 6px !important;"></div>
+    </div>
+
+    <div id="tabFermateContent" class="tab-content" style="display: none; margin: 0 !important; padding: 3px 12px 6px !important; border: 1px solid #dee2e6 !important; border-top: none !important; background-color: #fff !important; border-radius: 0 0 6px 6px !important;">
+        <div id="fermateInfo" style="display: none !important; flex-direction: column !important; padding: 8px 12px !important; margin-bottom: 8px !important; background-color: #e8f4fd !important; border-radius: 4px !important; font-size: 13px !important; color: #333 !important;"></div>
+        <div id="fermateList" style="display: flex !important; flex-direction: column !important; gap: 6px !important;"></div>
+    </div>
+
+    <style>
+        @keyframes busmap-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #busmap-container #spinnerImage { animation: busmap-spin 1s linear infinite !important; }
+        #busmap-container .dropdown-item:hover { background-color: #f0f0f0 !important; }
+        #busmap-container button { width: 100% !important; text-align: left !important; padding: 10px 15px !important; background-color: #fff !important; border: 1px solid #dee2e6 !important; border-radius: 4px !important; cursor: pointer !important; transition: all 0.2s !important; display: flex !important; align-items: center !important; gap: 10px !important; }
+        #busmap-container button:hover { background-color: #f8f9fa !important; border-color: #adb5bd !important; }
+        #busmap-container #btnModificaTratta, #busmap-container #btnResetMap { width: auto !important; display: inline-block !important; text-align: center !important; }
+        .color-dot { width: 12px !important; height: 12px !important; border-radius: 50% !important; flex-shrink: 0 !important; border: 1px solid rgba(0,0,0,0.1) !important; }
+    </style>
+
+    <script>
+        (async function() {
+            const container = document.getElementById('busmap-container');
+            const palette = ['#007bff', '#dc3545', '#28a745', '#fd7e14', '#6f42c1', '#20c997', '#e83e8c', '#17a2b8', '#ffc107', '#343a40'];
+            let allAgencies = [];
+            let oldCoordinates = [];
+            let currentlyShowedPinsUri = [];  // individual stop serviceUri values
+            let currentlyShowedPathsUri = []; // route URIs for drawn paths
+            let allLinesData = [];            // [{lineObj, agencyUri, stopName, lineColor, routes}] — populated after stop click
+            let drawEpoch = 0;               // incremented on each stop click to cancel stale background draws
+            let editMode = false;            // true when "Modifica tratta" edit mode is active
+            let editRouteUri = null;         // routeUri of the tratta being edited
+            let editRouteColor = null;       // color of the tratta being edited
+            let routeUpdateTimer = null;     // debounce timer for trattaRouteUpdated events
+            let editLineName = null;         // lineName (e.g. "17") of the tratta being edited, for timetable filtering
+            let stopOriginalTimes = [];      // fetched timetable times per stop (HH:MM), fixed reference
+            let stopCurrentTimes = [];       // current times per stop (HH:MM), updated when user edits
+            let activeEditStopIndex = -1;    // index of the stop currently highlighted for editing
+            let editStops = [];              // stop objects {id,name,serviceUri,lat,lng} kept in sync with marker drags
+            let editCurrentWkt = null;       // latest route WKT (updated on trattaRouteUpdated)
+            let pendingTimeUpdateCallback = null; // set by commit(); called by time update modal buttons
+            let navAbortController = null;        // aborted at the start of each navigation action to cancel stale fetches
+            let isLoading = false;                // true while any async nav operation is in-flight
+            // 'idle' | 'stop_selected' | 'line_selected' | 'tratta_selected'
+            let appState = 'idle';
+            parent.busMapAppState = 'idle';
+            const uid = '2782f15834f2f95b436a0ea32e832dde0a8947a11563c4a373a37a74cbc00d49';
+            const pinUid = 'cecf82b6bbd96a94c5f3fb76f30895a9f563ddb0e32188964fd94ffc37483656';
+            const commonParams = `requestFrom=user&geometry=true&format=json&lang=it`;
+            const categories = 'BusStop;Train_station;Tram_stops;Ferry_stop';
+            const apiBase = 'https://www.disit.org/superservicemap/api/v1/';
+
+            // --- FUNCTION DEFINITIONS ---
+
+            const tc = (v) => Math.trunc(v * 1e5) / 1e5; // truncate to 5 decimal places
+
+            const getLineColor = (index) => palette[index % palette.length];
+
+            // Abort any in-flight nav fetch, create a fresh controller and return its signal
+            const startNav = () => {
+                if (navAbortController) navAbortController.abort();
+                navAbortController = new AbortController();
+                return navAbortController.signal;
+            };
+
+            const showEditError = (msg) => {
+                const el = container.querySelector('#editError');
+                if (msg) { el.textContent = msg; el.style.display = 'block'; }
+                else { el.textContent = ''; el.style.display = 'none'; }
+            };
+
+            const setLoading = (v) => {
+                isLoading = v;
+                container.querySelector('#loadingOverlay').style.display = v ? 'flex' : 'none';
+            };
+
+            const setAppState = (state) => {
+                appState = state;
+                parent.busMapAppState = state;
+                console.log('[busmap] setAppState:', state, '| parent.busMapAppState:', parent.busMapAppState);
+                container.querySelector('#btnResetMap').style.display = state === 'idle' ? 'none' : 'inline-block';
+            };
+
+            const resetApp = () => {
+                if (editMode) exitEditMode();
+                if (navAbortController) navAbortController.abort();
+                isLoading = false;
+                container.querySelector('#loadingOverlay').style.display = 'none';
+                drawEpoch++;
+                removeTrattaPaths();
+                const staleUris = [...currentlyShowedPinsUri];
+                removeBusStopPins();
+                setTimeout(() => {
+                    for (const u of staleUris) {
+                        parent.$('body').trigger({ type: 'removeSelectorPin', target: 'w_Map_5270_widgetMap47629', passedData: {
+                                query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
+                                desc: u, display: ''
+                            }});
+                    }
+                }, 1500);
+                trattaStops = [];
+                trattaPinsShown = false;
+                if (oldCoordinates && oldCoordinates.length > 0) {
+                    parent.$('body').trigger({ type: 'removeGeoInfoPin', target: 'w_Map_5270_widgetMap47629',
+                        passedData: [{ eventType: 'GeoInfoPin', id: 'mapPoint', lat: oldCoordinates[1], lng: oldCoordinates[0], textHtml: '' }] });
+                    oldCoordinates = [];
+                }
+                allLinesData = [];
+                container.querySelector('#linesList').innerHTML = '';
+                container.querySelector('#tratteList').innerHTML = '';
+                container.querySelector('#fermateList').innerHTML = '';
+                for (const id of ['#agencyInfo', '#linesInfo', '#tratteInfo', '#fermateInfo']) {
+                    const el = container.querySelector(id);
+                    el.innerHTML = '';
+                    el.style.display = 'none';
+                }
+                // Rebuild agency buttons
+                const agenciesList = container.querySelector('#agenciesList');
+                agenciesList.innerHTML = '';
+                allAgencies.forEach(agency => {
+                    const button = document.createElement('button');
+                    button.textContent = agency.name;
+                    button.onclick = () => handleAgencyClick(agency);
+                    agenciesList.appendChild(button);
+                });
+                // Reset modifica tratta button to disabled
+                editRouteUri = null;
+                editRouteColor = null;
+                const btnMod = container.querySelector('#btnModificaTratta');
+                btnMod.disabled = true;
+                btnMod.innerHTML = 'Modifica tratta';
+                btnMod.style.cssText = 'width:auto !important; padding:6px 14px !important; background-color:#6c757d !important; color:white !important; border:none !important; border-radius:4px !important; cursor:not-allowed !important; font-weight:500 !important; white-space:nowrap !important; opacity:0.6 !important; font-size:0.85rem !important;';
+                setAppState('idle');
+            };
+
+            const switchTab = (tabId) => {
+                container.querySelectorAll('.tab').forEach(t => {
+                    t.style.backgroundColor = '#f8f9fa'; t.style.borderBottom = 'none'; t.style.fontWeight = '500'; t.style.color = '#666'; t.style.bottom = '0';
+                });
+                container.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+                const activeTab = container.querySelector('#' + tabId);
+                if (activeTab) {
+                    activeTab.style.backgroundColor = '#ffffff'; activeTab.style.borderBottom = '1px solid #fff'; activeTab.style.fontWeight = '600'; activeTab.style.color = '#007bff'; activeTab.style.position = 'relative'; activeTab.style.bottom = '-1px';
+                }
+                const content = container.querySelector('#' + tabId + 'Content');
+                if (content) content.style.display = 'block';
+            };
+
+
+            const removeTrattaPaths = () => {
+                for (let i = currentlyShowedPathsUri.length - 1; i >= 0; i--) {
+                    const uri = currentlyShowedPathsUri[i];
+                    parent.$('body').trigger({
+                        type: 'removeBusRoute',
+                        target: 'w_Map_5270_widgetMap47629',
+                        passedData: { desc: uri }
+                    });
+                    currentlyShowedPathsUri.splice(i, 1);
+                }
+            };
+
+            // drawRoutePath: triggers 'drawBusRoute' on the map widget via jQuery,
+            // handled by the dedicated handler in widgetMap.php where L and map are in scope.
+            const drawRoutePath = (routeUri, wktGeometry, color) => {
+                if (!wktGeometry) return;
+                parent.$('body').trigger({
+                    type: 'drawBusRoute',
+                    target: 'w_Map_5270_widgetMap47629',
+                    passedData: { desc: routeUri, wktGeometry, color }
+                });
+                currentlyShowedPathsUri.push(routeUri);
+            };
+
+            const enableEditButton = (routeUri, color) => {
+                editRouteUri = routeUri;
+                editRouteColor = color;
+                const btn = container.querySelector('#btnModificaTratta');
+                btn.innerHTML="Modifica tratta";
+                btn.disabled = false;
+                btn.style.backgroundColor = '#007bff';
+                btn.style.cursor = 'pointer';
+                btn.style.opacity = '1';
+            };
+
+            const handleTrattaClick = async (routeUri, wktGeometry, color, lineName = null, routeLabel = '') => {
+                if (isLoading || appState !== 'line_selected') return;
+                if (editMode) exitEditMode();
+                const signal = startNav();
+                drawEpoch++;
+                const myEpoch = drawEpoch;
+                removeTrattaPaths();
+                drawRoutePath(routeUri, wktGeometry, color);
+                editLineName = lineName;
+                editCurrentWkt = wktGeometry || null;
+                enableEditButton(routeUri, color);
+                // Replace tratte buttons with selected tratta info
+                const tratteInfoDiv = container.querySelector('#tratteInfo');
+                tratteInfoDiv.innerHTML += (routeLabel ? `<br><strong>Tratta:</strong> ${routeLabel}` : '');
+                container.querySelector('#tratteList').innerHTML = '';
+                // Show tratta info in Fermate tab and switch to it
+                const fermateInfoDiv = container.querySelector('#fermateInfo');
+                fermateInfoDiv.innerHTML = '<div>' +
+                    (lineName ? `<strong>Linea:</strong> ${lineName}` : '') +
+                    (lineName && routeLabel ? '<br>' : '') +
+                    (routeLabel ? `<strong>Tratta:</strong> ${routeLabel}` : '') +
+                    '</div>';
+                fermateInfoDiv.style.display = (lineName || routeLabel) ? 'flex' : 'none';
+                setAppState('tratta_selected');
+                switchTab('tabFermate');
+                setLoading(true);
+                try {
+                    await addRouteStopPins([{ route: routeUri }], myEpoch, signal);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const enterEditMode = async () => {
+                editMode = true;
+                drawEpoch++;
+                showEditError(null);
+                removeBusStopPins();
+                // Fetch ordered stops for the selected tratta (include serviceUri for timetable lookup)
+                const params = new URLSearchParams({ route: editRouteUri, requestFrom: 'user', uid: uid });
+                let stops = [];
+                try {
+                    const stopData = await (await fetch(`${apiBase}tpl/bus-stops/?${params}`)).json();
+                    const features = stopData?.BusStops?.features || [];
+                    stops = features.map((f, i) => ({
+                        id: i,
+                        name: f.properties?.name || 'Fermata',
+                        serviceUri: f.properties?.serviceUri || null,
+                        lat: f.geometry.coordinates[1],
+                        lng: f.geometry.coordinates[0]
+                    }));
+                } catch (e) { console.error(e); }
+
+                // Keep a mutable copy — coordinates updated when markers are dragged
+                editStops = stops.map(s => ({ ...s }));
+
+                // Populate edit stop list — each row has the stop name and a time placeholder
+                const editList = container.querySelector('#editStopsList');
+                editList.innerHTML = '';
+                stopOriginalTimes = [];
+                stopCurrentTimes = [];
+                activeEditStopIndex = -1;
+                stops.forEach((s, i) => {
+                    const li = document.createElement('li');
+                    li.id = `editStop-${i}`;
+                    li.style.cssText = 'padding: 4px 0 !important; font-size: 0.9rem !important; color: #333 !important; display: flex !important; justify-content: space-between !important; align-items: center !important; gap: 8px !important;';
+                    // Left side: static number + editable name, wrapped together as one flex item
+                    const nameWrapper = document.createElement('span');
+                    nameWrapper.style.cssText = 'display: inline-flex !important; align-items: center !important; gap: 2px !important; flex: 1 !important; min-width: 0 !important; overflow: hidden !important;';
+                    const numSpan = document.createElement('span');
+                    numSpan.textContent = `${i + 1}. `;
+                    numSpan.style.cssText = 'white-space: nowrap !important; flex-shrink: 0 !important;';
+                    const nameSpan = document.createElement('span');
+                    nameSpan.id = `editStopName-${i}`;
+                    nameSpan.textContent = s.name;
+                    nameWrapper.appendChild(numSpan);
+                    nameWrapper.appendChild(nameSpan);
+
+                    const timeSpan = document.createElement('span');
+                    timeSpan.id = `editStopTime-${i}`;
+                    timeSpan.style.cssText = 'font-size: 0.8rem !important; white-space: nowrap !important; color: #aaa !important;';
+                    timeSpan.textContent = (s.serviceUri && editLineName) ? '…' : '';
+                    li.appendChild(nameWrapper);
+                    li.appendChild(timeSpan);
+                    editList.appendChild(li);
+                });
+
+                // Switch to edit UI
+                container.querySelector('#radiusRow').style.display = 'none';
+                container.querySelector('#tabs').style.display = 'none';
+                container.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+                container.querySelector('#editPanel').style.display = 'block';
+
+                const btn = container.querySelector('#btnModificaTratta');
+                btn.innerHTML="Esci da modifica tratta";
+                btn.style.cssText = 'width:auto !important; padding:8px 14px !important; background-color:#ffc107 !important; color:#333 !important; border:none !important; border-radius:4px !important; cursor:pointer !important; font-weight:600 !important; white-space:nowrap !important; opacity:1 !important;';
+                btn.style.display = 'block';
+
+                parent.$('body').trigger({
+                    type: 'startEditTratta', target: 'w_Map_5270_widgetMap47629',
+                    passedData: { stops: stops.map(s => ({ lat: s.lat, lng: s.lng })), color: editRouteColor }
+                });
+
+                // Fetch timetable times sequentially so minTime is always known before the next stop.
+                // For each stop: prefer the same trip URI as stop[0]; fall back to the first binding
+                // for the line whose departureTime >= minTime (the previous stop's time).
+                // This guarantees monotonically increasing times even when the trip URI is missing.
+                if (editLineName && stops.length > 0) {
+                    let tripUri = null;
+                    let minTime = '00:00:00'; // advanced after each stop to enforce monotonicity
+                    let timeErrors = 0;
+                    let timesLoaded = 0;
+
+                    for (let i = 0; i < stops.length; i++) {
+                        if (!editMode) return;
+                        const s = stops[i];
+                        if (!s.serviceUri) continue;
+                        const timeSpan = container.querySelector(`#editStopTime-${i}`);
+                        if (!timeSpan) continue;
+
+                        try {
+                            const tParams = new URLSearchParams({ serviceUri: s.serviceUri, requestFrom: 'user', format: 'json', uid: uid, lang: 'it' });
+                            const data = await (await fetch(`${apiBase}?${tParams}`)).json();
+                            if (!editMode) return;
+
+                            const bindings = data?.timetable?.results?.bindings || [];
+
+                            // 1st choice: same trip as stop[0] (same bus run)
+                            let match = tripUri ? bindings.find(b => b.trip?.value === tripUri) : null;
+
+                            // 2nd choice: same line, departure >= minTime (monotonicity guarantee)
+                            if (!match) {
+                                match = bindings.find(b =>
+                                    b.lineName?.value === editLineName &&
+                                    (b.departureTime?.value || b.arrivalTime?.value || '00:00:00') >= minTime
+                                );
+                            }
+
+                            const time = match?.departureTime?.value || match?.arrivalTime?.value || null;
+                            if (time) {
+                                const displayTime = time.substring(0, 5);
+                                timeSpan.textContent = displayTime;
+                                timeSpan.style.cssText = `font-size: 0.8rem !important; white-space: nowrap !important; font-weight: 600 !important; color: ${editRouteColor} !important;`;
+                                stopOriginalTimes[i] = displayTime;
+                                stopCurrentTimes[i] = displayTime;
+                                timesLoaded++;
+                                minTime = time; // advance the floor for the next stop
+                                if (!tripUri && match?.trip?.value) tripUri = match.trip.value; // lock trip from first match
+                            } else {
+                                timeSpan.textContent = '-';
+                                stopOriginalTimes[i] = null;
+                                stopCurrentTimes[i] = null;
+                            }
+                        } catch (e) {
+                            timeErrors++;
+                            if (timeSpan) timeSpan.textContent = '-';
+                        }
+                    }
+                    if (timeErrors > 0) {
+                        showEditError(`Impossibile caricare gli orari per ${timeErrors} fermat${timeErrors === 1 ? 'a' : 'e'}`);
+                    } else if (timesLoaded === 0) {
+                        showEditError('Nessun orario disponibile per questa tratta');
+                    }
+                } else if (!editLineName) {
+                    showEditError('Nome linea non disponibile — impossibile caricare gli orari');
+                }
+            };
+
+            const exitEditMode = () => {
+                editMode = false;
+                stopOriginalTimes = [];
+                stopCurrentTimes = [];
+                activeEditStopIndex = -1;
+                editStops = [];
+                editCurrentWkt = null;
+                pendingTimeUpdateCallback = null;
+                container.querySelector('#timeUpdateModal').style.display = 'none';
+
+                // Stop LRM control
+                parent.$('body').trigger({ type: 'stopEditTratta', target: 'w_Map_5270_widgetMap47629', passedData: {} });
+
+                // Restore normal UI
+                container.querySelector('#radiusRow').style.display = 'flex';
+                container.querySelector('#tabs').style.display = 'flex';
+                container.querySelector('#editPanel').style.display = 'none';
+                switchTab('tabFermate');
+
+                // Reset show pins button state
+                trattaPinsShown = false;
+                const showBtn = container.querySelector('#btnShowStopPins');
+                if (showBtn) showBtn.textContent = 'Show stops on the map';
+
+                // Reset button style
+                const btn = container.querySelector('#btnModificaTratta');
+                btn.innerHTML="Modifica tratta";
+                btn.style.cssText = 'width:auto !important; padding:8px 14px !important; background-color:#007bff !important; color:white !important; border:none !important; border-radius:4px !important; cursor:pointer !important; font-weight:500 !important; white-space:nowrap !important; opacity:1 !important;';
+            };
+
+            const toMinutes = (t) => {
+                const [h, m] = t.split(':').map(Number);
+                return h * 60 + m;
+            };
+
+            const toTime = (mins) => {
+                const h = Math.floor(Math.max(0, mins) / 60) % 24;
+                const m = Math.max(0, mins) % 60;
+                return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+            };
+
+            const activateStopEdit = (idx) => {
+                if (activeEditStopIndex === idx) return; // already active for this stop
+
+                // Remove highlight from the previously active (but not yet confirmed) stop
+                if (activeEditStopIndex >= 0) {
+                    const prevLi = container.querySelector(`#editStop-${activeEditStopIndex}`);
+                    if (prevLi) prevLi.style.removeProperty('background-color');
+                }
+
+                activeEditStopIndex = idx;
+
+                const li = container.querySelector(`#editStop-${idx}`);
+                if (!li) return;
+                li.style.setProperty('background-color', '#fff3cd', 'important');
+                li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+                // Make the stop name editable
+                const nameEl = container.querySelector(`#editStopName-${idx}`);
+                if (nameEl && nameEl.tagName !== 'INPUT') {
+                    const nameInput = document.createElement('input');
+                    nameInput.type = 'text';
+                    nameInput.id = `editStopName-${idx}`;
+                    nameInput.value = nameEl.textContent; // just the name, number is in the sibling numSpan
+                    nameInput.style.cssText = 'font-size: 0.9rem !important; border: 1px solid #ccc !important; border-radius: 3px !important; padding: 2px 6px !important; flex: 1 !important; min-width: 0 !important; width: 0 !important; color: #333 !important; background: white !important;';
+                    nameEl.replaceWith(nameInput);
+                }
+
+                const span = container.querySelector(`#editStopTime-${idx}`);
+                if (!span || span.tagName === 'INPUT') return;
+
+                const originalTime = stopOriginalTimes[idx];
+                // baseTime is what the input starts from — delta is computed relative to this,
+                // not to originalTime, so repeated edits don't accumulate offsets.
+                const baseTime = stopCurrentTimes[idx] || originalTime;
+
+                const input = document.createElement('input');
+                input.type = 'time';
+                input.id = `editStopTime-${idx}`;
+                input.value = baseTime || '';
+                input.style.cssText = 'font-size: 0.8rem !important; border: 1px solid #ccc !important; border-radius: 3px !important; padding: 2px 6px !important; width: 100px !important; color: #333 !important; background: white !important;';
+
+                const confirmBtn = document.createElement('button');
+                confirmBtn.textContent = '✓';
+                confirmBtn.title = 'Conferma orario';
+                confirmBtn.disabled = true;
+                confirmBtn.style.cssText = 'font-size: 0.75rem !important; padding: 1px 5px !important; background: #28a745 !important; color: white !important; border: none !important; border-radius: 3px !important; cursor: pointer !important; opacity: 0.4 !important; line-height: 1.4 !important;';
+
+                const validate = () => {
+                    if (!input.value) {
+                        input.style.setProperty('border-color', '#ccc', 'important');
+                        input.style.removeProperty('outline');
+                        confirmBtn.disabled = true;
+                        confirmBtn.style.setProperty('opacity', '0.4', 'important');
+                        return false;
+                    }
+                    if (originalTime && input.value < originalTime) {
+                        input.style.setProperty('border-color', '#dc3545', 'important');
+                        input.style.setProperty('outline', '2px solid #dc3545', 'important');
+                        confirmBtn.disabled = true;
+                        confirmBtn.style.setProperty('opacity', '0.4', 'important');
+                        return false;
+                    }
+                    input.style.setProperty('border-color', '#28a745', 'important');
+                    input.style.removeProperty('outline');
+                    confirmBtn.disabled = false;
+                    confirmBtn.style.setProperty('opacity', '1', 'important');
+                    return true;
+                };
+
+                input.addEventListener('input', validate);
+
+                const commit = () => {
+                    if (!validate()) return;
+
+                    // applyChange is called by the modal button listeners (false = only this stop, true = also following)
+                    const applyChange = (applyToFollowing) => {
+                        const delta = baseTime ? toMinutes(input.value) - toMinutes(baseTime) : 0;
+                        stopCurrentTimes[idx] = input.value;
+
+                        if (applyToFollowing && delta !== 0) {
+                            for (let j = idx + 1; j < stopCurrentTimes.length; j++) {
+                                if (stopCurrentTimes[j] == null) continue;
+                                const newTime = toTime(toMinutes(stopCurrentTimes[j]) + delta);
+                                stopCurrentTimes[j] = newTime;
+                                const el = container.querySelector(`#editStopTime-${j}`);
+                                if (el) {
+                                    if (el.tagName === 'INPUT') el.value = newTime;
+                                    else el.textContent = newTime;
+                                }
+                            }
+                        }
+
+                        // Lock the name back to a plain span
+                        const nameInput = container.querySelector(`#editStopName-${idx}`);
+                        if (nameInput && nameInput.tagName === 'INPUT') {
+                            const confirmedName = document.createElement('span');
+                            confirmedName.id = `editStopName-${idx}`;
+                            confirmedName.textContent = nameInput.value;
+                            nameInput.replaceWith(confirmedName);
+                        }
+
+                        // Replace time wrapper with a plain span — stop is locked until dragged again
+                        const confirmedSpan = document.createElement('span');
+                        confirmedSpan.id = `editStopTime-${idx}`;
+                        confirmedSpan.textContent = input.value;
+                        confirmedSpan.style.cssText = `font-size: 0.8rem !important; white-space: nowrap !important; font-weight: 700 !important; color: ${editRouteColor} !important;`;
+                        wrapper.replaceWith(confirmedSpan);
+
+                        activeEditStopIndex = -1;
+                    };
+
+                    // Show choice modal; modal buttons will call applyChange and clear the callback
+                    pendingTimeUpdateCallback = applyChange;
+                    container.querySelector('#timeUpdateModal').style.display = 'flex';
+                };
+
+                confirmBtn.addEventListener('click', commit);
+
+                const wrapper = document.createElement('span');
+                wrapper.style.cssText = 'display: inline-flex !important; align-items: center !important; gap: 3px !important;';
+                wrapper.appendChild(input);
+                wrapper.appendChild(confirmBtn);
+                span.replaceWith(wrapper);
+                input.focus();
+            };
+
+            let trattaStops = []; // {uri, name, lat, lng} for the selected tratta, used by "Show on map"
+            let trattaPinsShown = false;
+
+            // addRouteStopPins: populates Fermate tab with stops from all given routes
+            // (no map pins — only the route lines are drawn on the map)
+            const addRouteStopPins = async (routes, epoch, signal) => {
+                removeBusStopPins();
+                trattaStops = [];
+                const fermateList = container.querySelector('#fermateList');
+                fermateList.innerHTML = '';
+                const isTratta = appState === 'tratta_selected';
+                const seenUris = new Set();
+                for (const r of routes) {
+                    if (epoch !== drawEpoch) return;
+                    const params = new URLSearchParams({ route: r.route, requestFrom: 'user', uid: uid });
+                    try {
+                        const stopData = await (await fetch(`${apiBase}tpl/bus-stops/?${params}`, { signal })).json();
+                        const features = stopData?.BusStops?.features || [];
+                        for (const f of features) {
+                            if (epoch !== drawEpoch) return;
+                            const uri = f.properties?.serviceUri;
+                            if (!uri || seenUris.has(uri)) continue;
+                            seenUris.add(uri);
+                            const name = f.properties?.name || 'Fermata';
+                            if (isTratta) {
+                                trattaStops.push({ uri, name });
+                                const li = document.createElement('div');
+                                li.style.cssText = 'padding: 6px 0 !important; border-bottom: 1px solid #eee !important; font-size: 13px !important; color: #333 !important;';
+                                li.textContent = name;
+                                fermateList.appendChild(li);
+                            } else {
+                                const btn = document.createElement('button');
+                                btn.textContent = name;
+                                btn.onclick = () => clickOnBusStopOnGui(uri);
+                                fermateList.appendChild(btn);
+                            }
+                        }
+                    } catch (e) { if (e.name !== 'AbortError') console.error('Error fetching stops for route', r.route, e); return; }
+                }
+                if (isTratta && trattaStops.length > 0) {
+                    trattaPinsShown = false;
+                    const showBtn = document.createElement('button');
+                    showBtn.id = 'btnShowStopPins';
+                    showBtn.textContent = 'Show stops on the map';
+                    showBtn.style.cssText = 'margin-top: 6px !important; padding: 6px 14px !important; background-color: #007bff !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-weight: 500 !important; align-self: flex-start !important;';
+                    showBtn.onclick = () => {
+                        if (trattaPinsShown) {
+                            const uris = [...currentlyShowedPinsUri];
+                            removeBusStopPins();
+                            setTimeout(() => {
+                                for (const u of uris) {
+                                    parent.$('body').trigger({ type: 'removeSelectorPin', target: 'w_Map_5270_widgetMap47629', passedData: {
+                                            query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
+                                            desc: u, display: ''
+                                        }});
+                                }
+                            }, 1500);
+                            trattaPinsShown = false;
+                            showBtn.textContent = 'Show stops on the map';
+                        } else {
+                            const btnMod = container.querySelector('#btnModificaTratta');
+                            const btnReset = container.querySelector('#btnResetMap');
+                            btnMod.disabled = true;
+                            btnMod.style.opacity = '0.6';
+                            btnMod.style.cursor = 'not-allowed';
+                            showBtn.disabled = true;
+                            showBtn.style.opacity = '0.6';
+                            showBtn.style.cursor = 'not-allowed';
+                            btnReset.disabled = true;
+                            btnReset.style.opacity = '0.6';
+                            btnReset.style.cursor = 'not-allowed';
+                            let pending = trattaStops.length;
+                            const onPinLoaded = () => {
+                                pending--;
+                                if (pending <= 0) {
+                                    btnMod.disabled = false;
+                                    btnMod.style.opacity = '1';
+                                    btnMod.style.cursor = 'pointer';
+                                    showBtn.disabled = false;
+                                    showBtn.style.opacity = '1';
+                                    showBtn.style.cursor = 'pointer';
+                                    btnReset.disabled = false;
+                                    btnReset.style.opacity = '1';
+                                    btnReset.style.cursor = 'pointer';
+                                }
+                            };
+                            for (const s of trattaStops) {
+                                currentlyShowedPinsUri.push(s.uri);
+                                parent.$('body').trigger({ type: 'addSelectorPin', target: 'w_Map_5270_widgetMap47629', passedData: {
+                                        query: `${apiBase}?serviceUri=${encodeURIComponent(s.uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
+                                        targets: '', eventGenerator: $(container),
+                                        color1: '#ffdb4d', color2: '#fff5cc', queryType: 'Default',
+                                        desc: s.uri, display: 'pins', pinattr: 'square', pincolor: '#959595',
+                                        noExecute: true, onLoaded: onPinLoaded
+                                    }});
+                            }
+                            trattaPinsShown = true;
+                            showBtn.textContent = 'Hide stops from the map';
+                        }
+                    };
+                    container.querySelector('#fermateInfo').appendChild(showBtn);
+                }
+            };
+
+            // fetchRoutesForLine: fetches and caches /tpl/bus-routes/ for a lineData entry
+            const fetchRoutesForLine = async (lineData, signal) => {
+                if (lineData.routes !== null) return lineData.routes;
+                const params = new URLSearchParams({ line: lineData.lineObj.busLine, agency: lineData.agencyUri, busStopName: lineData.stopName, requestFrom: 'user', geometry: true, uid: uid });
+                const json = await (await fetch(`${apiBase}tpl/bus-routes/?${params}`, { signal })).json();
+                const raw = Array.isArray(json) ? json : (Array.isArray(json?.BusRoutes) ? json.BusRoutes : []);
+                lineData.routes = raw.map(r => ({
+                    route: r.route, wktGeometry: r.wktGeometry,
+                    routeLabel: r.routeName || (r.firstBusStop && r.lastBusStop ? `${r.firstBusStop} → ${r.lastBusStop}` : 'Tratta')
+                }));
+                return lineData.routes;
+            };
+
+            // drawAllLinesInBackground: draws all lines' routes after stop click; stops if epoch changes
+            const drawAllLinesInBackground = async (epoch, signal) => {
+                for (const lineData of allLinesData) {
+                    if (epoch !== drawEpoch) return;
+                    try {
+                        const routes = await fetchRoutesForLine(lineData, signal);
+                        for (const r of routes) {
+                            if (epoch !== drawEpoch) return;
+                            drawRoutePath(r.route, r.wktGeometry, lineData.lineColor);
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                        }
+                    } catch (e) {
+                        if (e.name === 'AbortError') return;
+                        console.error('Error drawing line', lineData.lineObj.busLine, e);
+                    }
+                }
+            };
+
+            // handleLineClick: called when user clicks a line button in Lines tab or a drawn polyline
+            // removes all currently drawn routes, draws only selected line's routes, shows its stops
+            const handleLineClick = async (lineIndex) => {
+                if (isLoading || appState !== 'stop_selected') return;
+                const signal = startNav();
+                drawEpoch++;
+                const myEpoch = drawEpoch;
+                removeTrattaPaths();
+                const lineData = allLinesData[lineIndex];
+                if (!lineData) return;
+                // Replace line buttons with selected line info
+                const linesInfoDiv = container.querySelector('#linesInfo');
+                linesInfoDiv.innerHTML = `<strong>Linea:</strong> ${lineData.lineObj.busLine} - ${lineData.lineObj.lineDesc}`;
+                linesInfoDiv.style.display = 'block';
+                container.querySelector('#linesList').innerHTML = '';
+                setLoading(true);
+                try {
+                    const routes = await fetchRoutesForLine(lineData, signal);
+                    if (myEpoch !== drawEpoch) return;
+                    for (const r of routes) drawRoutePath(r.route, r.wktGeometry, lineData.lineColor);
+
+                    const list = container.querySelector('#tratteList');
+                    list.innerHTML = '';
+                    // Show selected line in Tratte tab
+                    const tratteInfoDiv = container.querySelector('#tratteInfo');
+                    tratteInfoDiv.innerHTML = `<strong>Linea:</strong> ${lineData.lineObj.busLine} - ${lineData.lineObj.lineDesc}`;
+                    tratteInfoDiv.style.display = 'block';
+
+                    if (routes.length === 0) { list.textContent = 'No routes found.'; switchTab('tabTratte'); return; }
+                    routes.forEach(r => {
+                        const btn = document.createElement('button');
+                        const dot = document.createElement('div');
+                        dot.className = 'color-dot'; dot.style.backgroundColor = lineData.lineColor;
+                        btn.appendChild(dot);
+                        btn.appendChild(document.createTextNode(r.routeLabel));
+                        btn.onclick = () => handleTrattaClick(r.route, r.wktGeometry, lineData.lineColor, lineData.lineObj.busLine, r.routeLabel);
+                        list.appendChild(btn);
+                    });
+                    setAppState('line_selected');
+                    switchTab('tabTratte');
+                    await addRouteStopPins(routes, myEpoch, signal);
+                } catch (e) {
+                    if (e.name !== 'AbortError') console.error(e);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // handleAgencyLineClick: used for the agency flow (lines not tied to a stop)
+            const handleAgencyLineClick = async (lineObj, agencyUri, lineColor) => {
+                if (isLoading || appState !== 'idle') return;
+                const signal = startNav();
+                drawEpoch++;
+                const myEpoch = drawEpoch;
+                removeTrattaPaths();
+                removeBusStopPins();
+                // Replace line buttons with selected line info
+                const linesInfoDiv = container.querySelector('#linesInfo');
+                linesInfoDiv.innerHTML = `<strong>Linea:</strong> ${lineObj.busLine}`;
+                linesInfoDiv.style.display = 'block';
+                container.querySelector('#linesList').innerHTML = '';
+                setLoading(true);
+                const params = new URLSearchParams({ line: lineObj.busLine, agency: agencyUri, requestFrom: 'user', geometry: true, uid: uid });
+                try {
+                    const json = await (await fetch(`${apiBase}tpl/bus-routes/?${params}`, { signal })).json();
+                    if (myEpoch !== drawEpoch) { overlay.style.display = 'none'; return; }
+                    const routes = Array.isArray(json) ? json : (Array.isArray(json?.BusRoutes) ? json.BusRoutes : []);
+                    const list = container.querySelector('#tratteList');
+                    list.innerHTML = '';
+                    // Show selected line in Tratte tab
+                    const tratteInfoDiv = container.querySelector('#tratteInfo');
+                    tratteInfoDiv.innerHTML = `<strong>Linea:</strong> ${lineObj.busLine}`;
+                    tratteInfoDiv.style.display = 'block';
+
+                    if (routes.length === 0) { list.textContent = 'No routes found.'; overlay.style.display = 'none'; switchTab('tabTratte'); return; }
+                    const routeObjects = [];
+                    for (const r of routes) {
+                        if (myEpoch !== drawEpoch) return;
+                        const btn = document.createElement('button');
+                        const dot = document.createElement('div');
+                        dot.className = 'color-dot'; dot.style.backgroundColor = lineColor;
+                        btn.appendChild(dot);
+                        const label = r.routeName || (r.firstBusStop && r.lastBusStop ? `${r.firstBusStop} → ${r.lastBusStop}` : 'Tratta');
+                        btn.appendChild(document.createTextNode(label));
+                        btn.onclick = () => handleTrattaClick(r.route, r.wktGeometry, lineColor, lineObj.busLine, label);
+                        list.appendChild(btn);
+                        drawRoutePath(r.route, r.wktGeometry, lineColor);
+                        routeObjects.push({ route: r.route });
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    if (myEpoch !== drawEpoch) return;
+                    setAppState('line_selected');
+                    switchTab('tabTratte');
+                    await addRouteStopPins(routeObjects, myEpoch, signal);
+                } catch (e) {
+                    if (e.name !== 'AbortError') console.error(e);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // removeBusStopPins: removes all stop pins; pass a URI to keep that one stop visible
+            const removeBusStopPins = (clickedUri = '') => {
+                for (let i = currentlyShowedPinsUri.length - 1; i >= 0; i--) {
+                    const uri = currentlyShowedPinsUri[i];
+                    if (clickedUri === '' || uri !== clickedUri) {
+                        parent.$('body').trigger({ type: 'removeSelectorPin', target: 'w_Map_5270_widgetMap47629', passedData: {
+                                query: `${apiBase}?serviceUri=${encodeURIComponent(uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
+                                desc: uri, display: ''
+                            }});
+                        currentlyShowedPinsUri.splice(i, 1);
+                    }
+                }
+            };
+
+            // populateLinesTab: parses the rich response from api/v1/?serviceUri=...
+            // builds allLinesData cache and creates line buttons; routes drawn separately in background
+            const populateLinesTab = (result) => {
+                const list = container.querySelector('#linesList');
+                list.innerHTML = '';
+                allLinesData = [];
+                if (!result?.busLines?.results?.bindings) { list.textContent = 'No lines found for this stop.'; return; }
+
+                const agencyUri = result.BusStop?.features?.[0]?.properties?.agencyUri || '';
+                const agencyName = result.BusStop?.features?.[0]?.properties?.agency || '';
+                const stopName  = result.BusStop?.features?.[0]?.properties?.name || '';
+
+                // Replace agency buttons with selected agency/stop info
+                const agencyInfoDiv = container.querySelector('#agencyInfo');
+                if (agencyName || stopName) {
+                    agencyInfoDiv.innerHTML = (stopName ? `<strong>Fermata:</strong> ${stopName}` : '') +
+                        (stopName && agencyName ? '<br>' : '') +
+                        (agencyName ? `<strong>Agenzia:</strong> ${agencyName}` : '');
+                    agencyInfoDiv.style.display = 'block';
+                    container.querySelector('#agenciesList').innerHTML = '';
+                } else {
+                    agencyInfoDiv.style.display = 'none';
+                }
+
+                // Show stop name in Lines tab
+                const linesInfoDiv = container.querySelector('#linesInfo');
+                if (stopName) {
+                    linesInfoDiv.innerHTML = `<strong>Fermata:</strong> ${stopName}`;
+                    linesInfoDiv.style.display = 'block';
+                } else {
+                    linesInfoDiv.style.display = 'none';
+                }
+
+                const linesMap = {};
+                result.busLines.results.bindings.forEach(b => {
+                    const val = b.busLine?.value;
+                    if (val && !linesMap[val]) linesMap[val] = { busLine: val, lineDesc: b.lineDesc?.value || '', lineUri: b.lineUri?.value || '' };
+                });
+
+                const lines = Object.values(linesMap);
+                if (lines.length === 0) { list.textContent = 'No lines found.'; return; }
+
+                lines.forEach((line, i) => {
+                    const lineColor = getLineColor(i);
+                    allLinesData.push({ lineObj: line, agencyUri, stopName, lineColor, routes: null });
+                    const button = document.createElement('button');
+                    const dot = document.createElement('div');
+                    dot.className = 'color-dot';
+                    dot.style.backgroundColor = lineColor;
+                    button.appendChild(dot);
+                    button.appendChild(document.createTextNode(`${line.busLine} - ${line.lineDesc}`));
+                    button.onclick = () => handleLineClick(i);
+                    list.appendChild(button);
+                });
+            };
+
+            // fetchBusLinesFromStop: calls api/v1/?serviceUri=... which returns
+            // busLines.results.bindings (lines) + BusStop.features (with agencyUri, name)
+            const fetchBusLinesFromStop = async (uri, signal) => {
+                const params = new URLSearchParams({ serviceUri: uri, requestFrom: 'user', format: 'json', uid: uid, lang: 'it' });
+                return await (await fetch(`${apiBase}?${params.toString()}`, { signal })).json();
+            };
+
+            // fetchBusStops: returns { BusStops: { features: [...] }, Services: { features: [...] } }
+            const fetchBusStops = async (coordinates, signal) => {
+                const radius = (parseFloat(container.querySelector('#searchBarRadius').value) || 200) / 1000;
+                const params = new URLSearchParams({
+                    selection: `${coordinates[1]};${coordinates[0]}`,
+                    requestFrom: 'user', categories: categories, maxResults: 100, maxDists: radius,
+                    format: 'json', uid: pinUid, lang: 'it', geometry: 'true'
+                });
+                return await (await fetch(`${apiBase}?${params.toString()}`, { signal })).json();
+            };
+
+            // addBusStopPins: adds one individual pin per stop URI (display: 'pins')
+            const addBusStopPins = (result) => {
+                const features = result?.BusStops?.features || [];
+                features.forEach(f => {
+                    const uri = f.properties.serviceUri;
+                    if (!uri) return;
+                    currentlyShowedPinsUri.push(uri);
+                    parent.$('body').trigger({ type: 'addSelectorPin', target: 'w_Map_5270_widgetMap47629', passedData: {
+                            query: `${apiBase}?serviceUri=${encodeURIComponent(uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
+                            targets: '', eventGenerator: $(container),
+                            color1: '#ffdb4d', color2: '#fff5cc', queryType: 'Default',
+                            desc: uri, display: 'pins', pinattr: 'square', pincolor: '#959595'
+                        }});
+                });
+            };
+
+            const populateFermateTab = (result) => {
+                const list = container.querySelector('#fermateList');
+                list.innerHTML = '';
+                const features = [...(result?.BusStops?.features || []), ...(result?.Services?.features || [])];
+                if (features.length === 0) { list.textContent = 'No stops found in the area.'; return; }
+                features.forEach(f => {
+                    const uri = f.properties.serviceUri;
+                    const name = f.properties.name || 'Fermata';
+                    const btn = document.createElement('button');
+                    btn.textContent = name;
+                    btn.onclick = () => clickOnBusStopOnGui(uri);
+                    list.appendChild(btn);
+                });
+            };
+
+            const clickOnBusStopOnGui = async (uri) => {
+                if (isLoading || appState !== 'idle') return;
+                const signal = startNav();
+                drawEpoch++;
+                const myEpoch = drawEpoch;
+                removeTrattaPaths();
+                if (oldCoordinates && oldCoordinates.length > 0) {
+                    parent.$('body').trigger({ type: 'removeGeoInfoPin', target: 'w_Map_5270_widgetMap47629',
+                        passedData: [{ eventType: 'GeoInfoPin', id: 'mapPoint', lat: oldCoordinates[1], lng: oldCoordinates[0], textHtml: '' }] });
+                    oldCoordinates = [];
+                }
+                // Save URIs before removing — we'll re-issue removes after a delay
+                // to catch any addSelectorPin AJAX that completes late
+                const staleUris = [...currentlyShowedPinsUri];
+                removeBusStopPins();
+                setTimeout(() => {
+                    for (const u of staleUris) {
+                        parent.$('body').trigger({ type: 'removeSelectorPin', target: 'w_Map_5270_widgetMap47629', passedData: {
+                                query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
+                                desc: u, display: ''
+                            }});
+                    }
+                }, 1500);
+                setLoading(true);
+                try {
+                    const res = await fetchBusLinesFromStop(uri, signal);
+                    if (myEpoch !== drawEpoch) return;
+                    populateLinesTab(res);
+                    setAppState('stop_selected');
+                    switchTab('tabLines');
+                } catch (e) {
+                    if (e.name !== 'AbortError') console.error(e);
+                } finally {
+                    setLoading(false);
+                }
+                // draw all lines' routes progressively in background (non-blocking)
+                drawAllLinesInBackground(myEpoch, signal);
+            };
+
+            const addLocationPin = (coords) => {
+                const pin = [{ "eventType": "GeoInfoPin", "id": "mapPoint", "lat": coords[1], "lng": coords[0], "textHtml": "Ricerca qui" }];
+                if (oldCoordinates && oldCoordinates.length > 0) {
+                    parent.$('body').trigger({ type: 'removeGeoInfoPin', target: 'w_Map_5270_widgetMap47629', passedData: [{ "eventType": "GeoInfoPin", "id": "mapPoint", "lat": oldCoordinates[1], "lng": oldCoordinates[0], "textHtml": "" }] });
+                }
+                oldCoordinates = coords;
+                parent.$('body').trigger({ type: 'addGeoInfoPin', target: 'w_Map_5270_widgetMap47629', passedData: pin });
+            };
+
+
+            // --- INITIALIZATION ---
+
+            container.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.id));
+
+            container.querySelector('#btnModificaTratta').onclick = () => {
+                if (editMode) exitEditMode(); else if (editRouteUri) enterEditMode();
+            };
+
+            container.querySelector('#btnResetMap').onclick = () => resetApp();
+
+            parent.document.addEventListener("receiveBusStopDetails", async (e) => {
+                if (editMode || isLoading || appState !== 'idle') return;
+                const signal = startNav();
+                drawEpoch++;
+                const myEpoch = drawEpoch;
+                let coords = [tc(e.detail.passedData.longitude), tc(e.detail.passedData.latitude)];
+                removeTrattaPaths();
+                removeBusStopPins();
+                addLocationPin(coords);
+                setLoading(true);
+                try {
+                    const result = await fetchBusStops(coords, signal);
+                    if (myEpoch !== drawEpoch) return;
+                    populateFermateTab(result);
+                    addBusStopPins(result);
+                    switchTab('tabFermate');
+                } catch (err) {
+                    if (err.name !== 'AbortError') console.error(err);
+                } finally {
+                    setLoading(false);
+                }
+            });
+
+            parent.document.addEventListener("clickOnBusStop", async (e) => {
+                if (editMode || isLoading || appState !== 'idle') return;
+                await clickOnBusStopOnGui(e.detail.passedData.serviceUri);
+            });
+
+            parent.document.addEventListener("clickOnBusRoute", (e) => {
+                if (editMode || isLoading || appState !== 'stop_selected') return;
+                const routeUri = e.detail.routeUri;
+                const lineIndex = allLinesData.findIndex(ld => ld.routes && ld.routes.some(r => r.route === routeUri));
+                if (lineIndex !== -1) handleLineClick(lineIndex);
+            });
+
+            parent.document.addEventListener('trattaRouteUpdated', (e) => {
+                if (!editMode) return;
+                showEditError(null);
+                editCurrentWkt = e.detail.wkt;
+                clearTimeout(routeUpdateTimer);
+                routeUpdateTimer = setTimeout(() => {
+                    removeTrattaPaths();
+                    drawRoutePath(editRouteUri, e.detail.wkt, editRouteColor);
+                }, 150);
+            });
+
+            parent.document.addEventListener('trattaRouteError', (e) => {
+                if (!editMode) return;
+                showEditError(e.detail?.message || 'Errore di routing: il server non risponde');
+            });
+
+            parent.document.addEventListener('editStopMoved', (e) => {
+                if (!editMode) return;
+                activateStopEdit(e.detail.stopIndex);
+            });
+
+            parent.document.addEventListener('editStopDropped', (e) => {
+                if (!editMode) return;
+                const { stopIndex, lat, lng } = e.detail;
+                if (editStops[stopIndex]) {
+                    editStops[stopIndex].lat = lat;
+                    editStops[stopIndex].lng = lng;
+                }
+            });
+
+            // ── Save / Export ──────────────────────────────────────────────
+            const buildExportJson = () => {
+                // Collect current names from DOM (user may have edited them)
+                const stopsData = editStops.map((s, i) => {
+                    const nameEl = container.querySelector(`#editStopName-${i}`);
+                    const currentName = nameEl ? nameEl.textContent || nameEl.value || s.name : s.name;
+                    return {
+                        index: i + 1,
+                        name: currentName,
+                        serviceUri: s.serviceUri || null,
+                        coordinates: { lat: s.lat, lng: s.lng },
+                        scheduledTime: stopCurrentTimes[i] || null
+                    };
+                });
+                return {
+                    route: {
+                        uri: editRouteUri,
+                        line: editLineName,
+                        color: editRouteColor
+                    },
+                    geometry: editCurrentWkt || null,
+                    stops: stopsData,
+                    exportedAt: new Date().toISOString()
+                };
+            };
+
+            const openSaveModal = () => {
+                const json = JSON.stringify(buildExportJson(), null, 2);
+                const modal = container.querySelector('#saveModal');
+                container.querySelector('#saveJsonOutput').textContent = json;
+                modal.style.display = 'flex';
+            };
+
+            container.querySelector('#btnSaveEdit').addEventListener('click', openSaveModal);
+            container.querySelector('#btnEsciModifica').addEventListener('click', exitEditMode);
+
+            container.querySelector('#btnCloseModal').addEventListener('click', () => {
+                container.querySelector('#saveModal').style.display = 'none';
+            });
+
+            container.querySelector('#btnCopyJson').addEventListener('click', () => {
+                const text = container.querySelector('#saveJsonOutput').textContent;
+                navigator.clipboard.writeText(text).then(() => {
+                    const btn = container.querySelector('#btnCopyJson');
+                    const orig = btn.textContent;
+                    btn.textContent = 'Copiato!';
+                    setTimeout(() => { btn.textContent = orig; }, 1500);
+                });
+            });
+
+            container.querySelector('#btnTimeUpdateOnly').addEventListener('click', () => {
+                container.querySelector('#timeUpdateModal').style.display = 'none';
+                if (pendingTimeUpdateCallback) { pendingTimeUpdateCallback(false); pendingTimeUpdateCallback = null; }
+            });
+
+            container.querySelector('#btnTimeUpdateAll').addEventListener('click', () => {
+                container.querySelector('#timeUpdateModal').style.display = 'none';
+                if (pendingTimeUpdateCallback) { pendingTimeUpdateCallback(true); pendingTimeUpdateCallback = null; }
+            });
+
+            container.querySelector('#btnDownloadJson').addEventListener('click', () => {
+                const text = container.querySelector('#saveJsonOutput').textContent;
+                const blob = new Blob([text], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `tratta_${editLineName || 'export'}_${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+
+
+            const agenciesRes = await (async () => {
+                try { return await (await fetch(apiBase + 'tpl/agencies/')).json(); }
+                catch (e) { return []; }
+            })();
+
+            allAgencies = agenciesRes.Agencies || [];
+            const agenciesList = container.querySelector('#agenciesList');
+            allAgencies.forEach(agency => {
+                const button = document.createElement('button');
+                button.textContent = agency.name;
+                button.onclick = () => handleAgencyClick(agency);
+                agenciesList.appendChild(button);
+            });
+
+            const handleAgencyClick = async (agency) => {
+                if (isLoading || appState !== 'idle') return;
+                const signal = startNav();
+                setLoading(true);
+                // Replace agency buttons with selected agency name
+                const agencyInfoDiv = container.querySelector('#agencyInfo');
+                agencyInfoDiv.innerHTML = `<strong>Agenzia:</strong> ${agency.name}`;
+                agencyInfoDiv.style.display = 'block';
+                container.querySelector('#agenciesList').innerHTML = '';
+                try {
+                    const data = await (await fetch(`${apiBase}tpl/bus-lines/?agency=${agency.agency}`, { signal })).json();
+                    const linesList = container.querySelector('#linesList');
+                    linesList.innerHTML = '';
+                    if (!data.BusLines) { linesList.textContent = 'No lines found.'; return; }
+                    let lineIndex = 0;
+                    data.BusLines.forEach(line => {
+                        const lineColor = getLineColor(lineIndex++);
+                        const button = document.createElement('button');
+                        const dot = document.createElement('div');
+                        dot.className = 'color-dot';
+                        dot.style.backgroundColor = lineColor;
+                        button.appendChild(dot);
+                        button.appendChild(document.createTextNode(`Line ${line.shortName} - ${line.longName}`));
+                        button.onclick = () => handleAgencyLineClick({ busLine: line.shortName }, agency.agency, lineColor);
+                        linesList.appendChild(button);
+                    });
+                    switchTab('tabLines');
+                } catch (e) {
+                    if (e.name !== 'AbortError') console.error(e);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+
+        })();
+    </script>
+</div>
+
