@@ -1083,6 +1083,62 @@
         parent.$('body').trigger({ type: 'addGeoInfoPin', target: 'w_Map_5270_widgetMap47629', passedData: pin });
     };
 
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS - START -
+    // ----------------------------------
+
+    // ── Save / Export (GTFS-Normalized Document) ───────────────────
+    const buildExportJson = () => {
+        // generate unique id by using timestamp
+        const timestamp = new Date().getTime();
+        const clonedTripId = `${editRouteUri}_TRIP_${timestamp}`;
+        const clonedShapeId = `${editRouteUri}_SHAPE_${timestamp}`;
+        // map new stops and stops_times
+        const gtfsStopTimes = editStops.map((s, i) => {
+            const nameEl = container.querySelector(`#editStopName-${i}`);
+            const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
+            const sequence = i+1;
+            const id = s.serviceUri ? s.serviceUri : "TEMP_STOP_"+sequence;
+            const scheduledTime = stopCurrentTimes[i];
+            return {
+                stop_sequence: sequence,
+                stop_id: id,
+                stop_name: currentName,
+                stop_lat: s.lat,
+                stop_lon: s.lng,
+                arrival_time: scheduledTime,
+                departure_time: scheduledTime
+            };
+        });
+
+        // payload assembly
+        return {
+            entityType: "PublicTransportRoutePatch",
+            metadata: {
+                modifiedAt: new Date().toISOString(),
+                requiresCopyOnWrite: true,
+                exportedBy: "GTFS_Editor_Tesi"
+            },
+            route: {
+                route_id: editRouteUri,
+                route_short_name: editLineName,
+                route_color: editRouteColor
+            },
+            trip: {
+                trip_id: clonedTripId
+            },
+            shape: {
+                shape_id: clonedShapeId,
+                wkt_geometry: editCurrentWkt || null
+                // TODO array dei punti e shape_dist_traveled (topologia aggiornata)
+            },
+            stop_times: gtfsStopTimes
+        };
+    };
+
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS -  END  -
+    // ----------------------------------
 
     // --- INITIALIZATION ---
 
@@ -1162,6 +1218,7 @@
         }
     });
 
+    /* FUNZIONE VECCHIA, RI-FATTA A LINEA 1092
     // ── Save / Export ──────────────────────────────────────────────
     const buildExportJson = () => {
         // Collect current names from DOM (user may have edited them)
@@ -1188,6 +1245,7 @@
             exportedAt: new Date().toISOString()
         };
     };
+    */
 
     const openSaveModal = () => {
         const json = JSON.stringify(buildExportJson(), null, 2);
