@@ -1,0 +1,13 @@
+# dipendenze node
+node_modules/
+
+# cartella contenente file auto-compilati/di output
+dist/
+
+# configurazione di WebStorm/JetBrains
+.idea/
+*.iml
+
+# file di sistema
+.DS_Store
+Thumbs.db
