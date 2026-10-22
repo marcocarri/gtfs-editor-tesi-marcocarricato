@@ -1212,6 +1212,10 @@
     parent.document.addEventListener('editStopDropped', (e) => {
         if (!editMode) return;
         const { stopIndex, lat, lng } = e.detail;
+
+        // debugging tool to keep tracks of the updated values of lat and lng of the modified stop
+        console.log(`[DEBUG DROP] Fermata ${stopIndex} rilasciata a:`, lat, lng);
+
         if (editStops[stopIndex]) {
             editStops[stopIndex].lat = lat;
             editStops[stopIndex].lng = lng;
