@@ -1087,7 +1087,7 @@
     // - CUSTOM MODULES: THESIS - START -
     // ----------------------------------
 
-    // ── Save / Export (GTFS-Normalized Document) ───────────────────
+    // save & export GTFS-normalized json document
     const buildExportJson = () => {
         // generate unique id by using timestamp
         const timestamp = new Date().getTime();
@@ -1141,6 +1141,50 @@
     // ----------------------------------
 
     // --- INITIALIZATION ---
+
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS - START -
+    // ----------------------------------
+
+    // intercepts routing calls from map and extracts the updated waypoints without dependences from the s4c platform
+    const targetWindow = parent.window || window;
+    const nativeFetch = targetWindow.fetch;
+
+    targetWindow.fetch = function(...args) {
+        const url = args[0];
+
+        // if the call contains the waypoints it recalculate the route
+        if (typeof url === 'string' && url.includes('waypoints=')) {
+            try {
+                const match = url.match(/waypoints=([^&]+)/);
+                if (match && match[1]) {
+                    const rawPairs = decodeURIComponent(match[1]).split(';');
+
+                    rawPairs.forEach((pair, idx) => {
+                        const [lngStr, latStr] = pair.split(',');
+                        const lng = parseFloat(lngStr);
+                        const lat = parseFloat(latStr);
+
+                        // if the coordinate is valid and the stop does exists, it updates
+                        if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
+                            editStops[idx].lat = lat;
+                            editStops[idx].lng = lng;
+                        }
+                    });
+                    console.log('[INTERCEPTOR] Coordinate fermate sincronizzate con successo dai waypoints!');
+                }
+            } catch (err) {
+                console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
+            }
+        }
+
+        // it comes back to the normal flow of execution
+        return nativeFetch.apply(this, args);
+    };
+
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS -  END  -
+    // ----------------------------------
 
     container.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.id));
 
