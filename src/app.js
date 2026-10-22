@@ -1151,6 +1151,22 @@
 
     container.querySelector('#btnResetMap').onclick = () => resetApp();
 
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS - START -
+    // ----------------------------------
+
+    try {
+        if (typeof parent.dashboardParams === 'undefined') {
+            parent.dashboardParams = {};
+        }
+    } catch (err) {
+        console.warn('Impossibile accedere allo scope del parent per dashboardParams', err);
+    }
+
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS -  END  -
+    // ----------------------------------
+
     parent.document.addEventListener("receiveBusStopDetails", async (e) => {
         if (editMode || isLoading || appState !== 'idle') return;
         const signal = startNav();
@@ -1190,6 +1206,10 @@
 
     parent.document.addEventListener('trattaRouteUpdated', (e) => {
         if (!editMode) return;
+
+        // debugging tool to keep tracks of the update of the modified route
+        console.log('[DEBUG UPDATED] Ricevuto trattaRouteUpdated, dati evento: ', e.detail);
+
         showEditError(null);
         editCurrentWkt = e.detail.wkt;
         clearTimeout(routeUpdateTimer);
@@ -1206,16 +1226,20 @@
 
     parent.document.addEventListener('editStopMoved', (e) => {
         if (!editMode) return;
+
+        // debugging tool to keep tracks of the movement of the modified stop
+        console.log('[DEBUG MOVED] Ricevuto editStopMoved, dati evento: ', e.detail);
+
         activateStopEdit(e.detail.stopIndex);
     });
 
     parent.document.addEventListener('editStopDropped', (e) => {
         if (!editMode) return;
+
+        // debugging tool to keep tracks of the dropping off of the modified stop
+        console.log('[DEBUG DROPPED] Ricevuto editStopDropped, dati evento: ', e.detail);
+
         const { stopIndex, lat, lng } = e.detail;
-
-        // debugging tool to keep tracks of the updated values of lat and lng of the modified stop
-        console.log(`[DEBUG DROP] Fermata ${stopIndex} rilasciata a:`, lat, lng);
-
         if (editStops[stopIndex]) {
             editStops[stopIndex].lat = lat;
             editStops[stopIndex].lng = lng;
