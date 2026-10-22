@@ -1083,109 +1083,7 @@
         parent.$('body').trigger({ type: 'addGeoInfoPin', target: 'w_Map_5274_widgetMap47643', passedData: pin });
     };
 
-    // ----------------------------------
-    // - CUSTOM MODULES: THESIS - START -
-    // ----------------------------------
-
-    // save & export GTFS-normalized json document
-    const buildExportJson = () => {
-        // generate unique id by using timestamp
-        const timestamp = new Date().getTime();
-        const clonedTripId = `${editRouteUri}_TRIP_${timestamp}`;
-        const clonedShapeId = `${editRouteUri}_SHAPE_${timestamp}`;
-        // map new stops and stops_times
-        const gtfsStopTimes = editStops.map((s, i) => {
-            const nameEl = container.querySelector(`#editStopName-${i}`);
-            const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
-            const sequence = i+1;
-            const id = s.serviceUri ? s.serviceUri : "TEMP_STOP_"+sequence;
-            const scheduledTime = stopCurrentTimes[i];
-            return {
-                stop_sequence: sequence,
-                stop_id: id,
-                stop_name: currentName,
-                stop_lat: s.lat,
-                stop_lon: s.lng,
-                arrival_time: scheduledTime,
-                departure_time: scheduledTime
-            };
-        });
-
-        // payload assembly
-        return {
-            entityType: "PublicTransportRoutePatch",
-            metadata: {
-                modifiedAt: new Date().toISOString(),
-                requiresCopyOnWrite: true,
-                exportedBy: "GTFS_Editor_Tesi"
-            },
-            route: {
-                route_id: editRouteUri,
-                route_short_name: editLineName,
-                route_color: editRouteColor
-            },
-            trip: {
-                trip_id: clonedTripId
-            },
-            shape: {
-                shape_id: clonedShapeId,
-                wkt_geometry: editCurrentWkt || null
-                // TODO array dei punti e shape_dist_traveled (topologia aggiornata)
-            },
-            stop_times: gtfsStopTimes
-        };
-    };
-
-    // ----------------------------------
-    // - CUSTOM MODULES: THESIS -  END  -
-    // ----------------------------------
-
     // --- INITIALIZATION ---
-
-    // ----------------------------------
-    // - CUSTOM MODULES: THESIS - START -
-    // ----------------------------------
-
-    // intercepts routing calls from map and extracts the updated waypoints without dependences from the s4c platform
-    const targetWindow = parent.window || window;
-    const nativeFetch = targetWindow.fetch;
-
-    targetWindow.fetch = function(...args) {
-        const url = args[0];
-
-        // if the call contains the waypoints it recalculate the route
-        if (typeof url === 'string' && url.includes('waypoints=')) {
-            try {
-                const match = url.match(/waypoints=([^&]+)/);
-                if (match && match[1]) {
-                    const rawPairs = decodeURIComponent(match[1]).split(';');
-
-                    rawPairs.forEach((pair, idx) => {
-                        const [lngStr, latStr] = pair.split(',');
-                        const lng = parseFloat(lngStr);
-                        const lat = parseFloat(latStr);
-
-                        // if the coordinate is valid and the stop does exists, it updates
-                        if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
-                            editStops[idx].lat = lat;
-                            editStops[idx].lng = lng;
-                        }
-                    });
-                    console.log('[INTERCEPTOR] Coordinate fermate sincronizzate con successo dai waypoints!');
-                }
-            } catch (err) {
-                console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
-            }
-        }
-
-        // it comes back to the normal flow of execution
-        return nativeFetch.apply(this, args);
-    };
-
-    // ----------------------------------
-    // - CUSTOM MODULES: THESIS -  END  -
-    // ----------------------------------
-
     container.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.id));
 
     container.querySelector('#btnModificaTratta').onclick = () => {
@@ -1194,22 +1092,6 @@
     };
 
     container.querySelector('#btnResetMap').onclick = () => resetApp();
-
-    // ----------------------------------
-    // - CUSTOM MODULES: THESIS - START -
-    // ----------------------------------
-
-    try {
-        if (typeof parent.dashboardParams === 'undefined') {
-            parent.dashboardParams = {};
-        }
-    } catch (err) {
-        console.warn('Impossibile accedere allo scope del parent per dashboardParams', err);
-    }
-
-    // ----------------------------------
-    // - CUSTOM MODULES: THESIS -  END  -
-    // ----------------------------------
 
     parent.document.addEventListener("receiveBusStopDetails", async (e) => {
         if (editMode || isLoading || appState !== 'idle') return;
@@ -1250,10 +1132,6 @@
 
     parent.document.addEventListener('trattaRouteUpdated', (e) => {
         if (!editMode) return;
-
-        // debugging tool to keep tracks of the update of the modified route
-        console.log('[DEBUG UPDATED] Ricevuto trattaRouteUpdated, dati evento: ', e.detail);
-
         showEditError(null);
         editCurrentWkt = e.detail.wkt;
         clearTimeout(routeUpdateTimer);
@@ -1270,54 +1148,18 @@
 
     parent.document.addEventListener('editStopMoved', (e) => {
         if (!editMode) return;
-
-        // debugging tool to keep tracks of the movement of the modified stop
         console.log('[DEBUG MOVED] Ricevuto editStopMoved, dati evento: ', e.detail);
-
         activateStopEdit(e.detail.stopIndex);
     });
 
     parent.document.addEventListener('editStopDropped', (e) => {
         if (!editMode) return;
-
-        // debugging tool to keep tracks of the dropping off of the modified stop
-        console.log('[DEBUG DROPPED] Ricevuto editStopDropped, dati evento: ', e.detail);
-
         const { stopIndex, lat, lng } = e.detail;
         if (editStops[stopIndex]) {
             editStops[stopIndex].lat = lat;
             editStops[stopIndex].lng = lng;
         }
     });
-
-    /* FUNZIONE VECCHIA, RI-FATTA A LINEA 1092
-    // ── Save / Export ──────────────────────────────────────────────
-    const buildExportJson = () => {
-        // Collect current names from DOM (user may have edited them)
-        const stopsData = editStops.map((s, i) => {
-            const nameEl = container.querySelector(`#editStopName-${i}`);
-            const currentName = nameEl ? nameEl.textContent || nameEl.value || s.name : s.name;
-            return {
-                index: i + 1,
-                name: currentName,
-                serviceUri: s.serviceUri || null,
-                coordinates: { lat: s.lat, lng: s.lng },
-                scheduledTime: stopCurrentTimes[i] || null
-            };
-        });
-
-        return {
-            route: {
-                uri: editRouteUri,
-                line: editLineName,
-                color: editRouteColor
-            },
-            geometry: editCurrentWkt || null,
-            stops: stopsData,
-            exportedAt: new Date().toISOString()
-        };
-    };
-    */
 
     const openSaveModal = () => {
         const json = JSON.stringify(buildExportJson(), null, 2);
@@ -1429,5 +1271,104 @@
             setLoading(false);
         }
     };
+
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS - START -
+    // ----------------------------------
+
+    // save & export GTFS-normalized json document
+    const buildExportJson = () => {
+        // generate unique id by using timestamp
+        const timestamp = new Date().getTime();
+        const clonedTripId = `${editRouteUri}_TRIP_${timestamp}`;
+        const clonedShapeId = `${editRouteUri}_SHAPE_${timestamp}`;
+        // map new stops and stops_times
+        const gtfsStopTimes = editStops.map((s, i) => {
+            const nameEl = container.querySelector(`#editStopName-${i}`);
+            const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
+            const sequence = i+1;
+            const id = s.serviceUri ? s.serviceUri : "TEMP_STOP_"+sequence;
+            const scheduledTime = stopCurrentTimes[i];
+            return {
+                stop_sequence: sequence,
+                stop_id: id,
+                stop_name: currentName,
+                stop_lat: s.lat,
+                stop_lon: s.lng,
+                arrival_time: scheduledTime,
+                departure_time: scheduledTime
+            };
+        });
+
+        // payload assembly
+        return {
+            entityType: "PublicTransportRoutePatch",
+            metadata: {
+                modifiedAt: new Date().toISOString(),
+                requiresCopyOnWrite: true,
+                exportedBy: "GTFS_Editor_Tesi"
+            },
+            route: {
+                route_id: editRouteUri,
+                route_short_name: editLineName,
+                route_color: editRouteColor
+            },
+            trip: {
+                trip_id: clonedTripId
+            },
+            shape: {
+                shape_id: clonedShapeId,
+                wkt_geometry: editCurrentWkt || null
+                // TODO array dei punti e shape_dist_traveled (topologia aggiornata)
+            },
+            stop_times: gtfsStopTimes
+        };
+    };
+
+    // intercepts routing calls from map and extracts the updated waypoints without dependences from the S4C platform
+    const targetWindow = parent.window || window;
+    const nativeFetch = targetWindow.fetch;
+    targetWindow.fetch = function(...args) {
+        const url = args[0];
+        // if the call contains the waypoints it recalculate the route
+        if (typeof url === 'string' && url.includes('waypoints=')) {
+            try {
+                const match = url.match(/waypoints=([^&]+)/);
+                if (match && match[1]) {
+                    const rawPairs = decodeURIComponent(match[1]).split(';');
+                    rawPairs.forEach((pair, idx) => {
+                        const [lngStr, latStr] = pair.split(',');
+                        const lng = parseFloat(lngStr);
+                        const lat = parseFloat(latStr);
+                        // if the coordinate is valid and the stop does exists, it updates
+                        if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
+                            editStops[idx].lat = lat;
+                            editStops[idx].lng = lng;
+                        }
+                    });
+                    console.log('[INTERCEPTOR] Coordinate fermate sincronizzate con successo dai waypoints');
+                }
+            } catch (err) {
+                console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
+            }
+        }
+
+        // it comes back to the normal flow of execution
+        return nativeFetch.apply(this, args);
+    };
+
+    // prevents a fatal 'ReferenceError' triggered by the S4C platform when the editor is loaded in a clone that lacks
+    // URL parameters. Ensures that map listeners do not interrupt the execution chain
+    try {
+        if (typeof parent.dashboardParams === 'undefined') {
+            parent.dashboardParams = {};
+        }
+    } catch (err) {
+        console.warn('Impossibile accedere allo scope del parent per dashboardParams', err);
+    }
+
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS -  END  -
+    // ----------------------------------
 
 })();
