@@ -1330,33 +1330,33 @@
     // intercepts routing calls from map and extracts the updated waypoints without dependences from the S4C platform
     const targetWindow = parent.window || window;
     const nativeFetch = targetWindow.fetch;
-    targetWindow.fetch = async function(...args) {
+    targetWindow.fetch = function(...args) {
         const url = args[0];
-        // perform the native network request, without interfering
-        const response = await nativeFetch.apply(this, args);
-        // passive URL inspection to retrieve the coordinates
-        if (typeof url === 'string' && url.includes('waypoints=')) {
-            try {
-                const match = url.match(/waypoints=([^&]+)/);
-                if (match && match[1]) {
-                    const rawPairs = decodeURIComponent(match[1]).split(';');
-                    rawPairs.forEach((pair, idx) => {
-                        const [lngStr, latStr] = pair.split(',');
-                        const lng = parseFloat(lngStr);
-                        const lat = parseFloat(latStr);
-                        if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
-                            editStops[idx].lat = lat;
-                            editStops[idx].lng = lng;
-                        }
-                    });
-                    console.log('[INTERCEPTOR] Coordinate sincronizzate!');
+        // passive and parallel execution: it doesn't stop the network flow
+        setTimeout(() => {
+            if (typeof url === 'string' && url.includes('waypoints=')) {
+                try {
+                    const match = url.match(/waypoints=([^&]+)/);
+                    if (match && match[1]) {
+                        const rawPairs = decodeURIComponent(match[1]).split(';');
+                        rawPairs.forEach((pair, idx) => {
+                            const [lngStr, latStr] = pair.split(',');
+                            const lng = parseFloat(lngStr);
+                            const lat = parseFloat(latStr);
+                            if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
+                                editStops[idx].lat = lat;
+                                editStops[idx].lng = lng;
+                            }
+                        });
+                        console.log('[INTERCEPTOR] Coordinate sincronizzate in background');
+                    }
+                } catch (err) {
+                    console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
                 }
-            } catch (err) {
-                console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
             }
-        }
-        // return the original response intact to the map widget
-        return response;
+        }, 0);
+        // return the native fetch intact to the map widget
+        return nativeFetch.apply(this, args);
     };
 
     // prevents a fatal 'ReferenceError' triggered by the S4C platform when the editor is loaded in a clone that lacks
