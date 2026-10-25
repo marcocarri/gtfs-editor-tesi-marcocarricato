@@ -1141,10 +1141,12 @@
         }, 150);
     });
 
+    /* FUNZIONE RIFATTA
     parent.document.addEventListener('trattaRouteError', (e) => {
         if (!editMode) return;
         showEditError(e.detail?.message || 'Errore di routing: il server non risponde');
     });
+    */
 
     parent.document.addEventListener('editStopMoved', (e) => {
         if (!editMode) return;
@@ -1330,7 +1332,7 @@
     const nativeFetch = targetWindow.fetch;
     targetWindow.fetch = function(...args) {
         const url = args[0];
-        // if the call contains the waypoints it recalculate the route
+        // if the call contains the waypoints it recalculates the route
         if (typeof url === 'string' && url.includes('waypoints=')) {
             try {
                 const match = url.match(/waypoints=([^&]+)/);
@@ -1366,6 +1368,39 @@
     } catch (err) {
         console.warn('Impossibile accedere allo scope del parent per dashboardParams', err);
     }
+
+    parent.document.addEventListener('trattaRouteUpdated', (e) => {
+        if (!editMode) return;
+        showEditError(null);
+        editCurrentWkt = e.detail.wkt;
+        // parsing of the WKT geometry to GeoJSON format for Turf.js
+        let routeLineString = null;
+        try {
+            const coordsString =  editCurrentWkt.replace('LINESTRING','').replace('(','').replace(')','').trim();
+            const coordsArray = coordsString.split(',').map(pair => {
+                const [lng, lat] = pair.trim().split(' ').map(Number);
+                return [lng, lat];
+            });
+            routeLineString = turf.lineString(coordsArray);
+        } catch(err) {
+            console.warn('[TOPOLOGY] Errore nel parsing WKT per Turf.js:', err);
+        }
+        // calculation of the cumulative distance for each stop
+        if (routeLineString && typeof turf !== 'undefined') {
+            editStops.forEach((stop, index) => {
+                const stopPoint = turf.point([stop.lat, stop.lng]);
+                const snapped = turf.nearestPointOnLine(routeLineString, stopPoint);
+                stop.shape_dist_travelled = parseFloat((snapped.properties.location * 1000).toFixed(2));
+                console.log(`[TOPOLOGY] Fermata ${index+1} proiettata a ${stop.shape_dist_travelled} metri dalla partenza`);
+            });
+        }
+        // graphic redesign of the route on the map
+        clearTimeout(routeUpdateTimer);
+        routeUpdateTimer = setTimeout(() => {
+            removeTrattaPaths();
+            drawRoutePath(editRouteUri, e.detail.wkt, editRouteColor);
+        }, 150);
+    });
 
     // ----------------------------------
     // - CUSTOM MODULES: THESIS -  END  -
