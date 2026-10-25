@@ -1298,7 +1298,8 @@
                 stop_lat: s.lat,
                 stop_lon: s.lng,
                 arrival_time: scheduledTime,
-                departure_time: scheduledTime
+                departure_time: scheduledTime,
+                shape_dist_traveled: s.shape_dist_traveled !== undefined ? s.shape_dist_traveled : null
             };
         });
 
@@ -1321,7 +1322,6 @@
             shape: {
                 shape_id: clonedShapeId,
                 wkt_geometry: editCurrentWkt || null
-                // TODO array dei punti e shape_dist_traveled (topologia aggiornata)
             },
             stop_times: gtfsStopTimes
         };
