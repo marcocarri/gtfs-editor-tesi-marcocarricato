@@ -1330,9 +1330,11 @@
     // intercepts routing calls from map and extracts the updated waypoints without dependences from the S4C platform
     const targetWindow = parent.window || window;
     const nativeFetch = targetWindow.fetch;
-    targetWindow.fetch = function(...args) {
+    targetWindow.fetch = async function(...args) {
         const url = args[0];
-        // if the call contains the waypoints it recalculates the route
+        // perform the native network request, without interfering
+        const response = await nativeFetch.apply(this, args);
+        // passive URL inspection to retrieve the coordinates
         if (typeof url === 'string' && url.includes('waypoints=')) {
             try {
                 const match = url.match(/waypoints=([^&]+)/);
@@ -1342,21 +1344,19 @@
                         const [lngStr, latStr] = pair.split(',');
                         const lng = parseFloat(lngStr);
                         const lat = parseFloat(latStr);
-                        // if the coordinate is valid and the stop does exists, it updates
                         if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
                             editStops[idx].lat = lat;
                             editStops[idx].lng = lng;
                         }
                     });
-                    console.log('[INTERCEPTOR] Coordinate fermate sincronizzate con successo dai waypoints');
+                    console.log('[INTERCEPTOR] Coordinate sincronizzate!');
                 }
             } catch (err) {
                 console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
             }
         }
-
-        // it comes back to the normal flow of execution
-        return nativeFetch.apply(this, args);
+        // return the original response intact to the map widget
+        return response;
     };
 
     // prevents a fatal 'ReferenceError' triggered by the S4C platform when the editor is loaded in a clone that lacks
