@@ -1388,10 +1388,10 @@
         // calculation of the cumulative distance for each stop
         if (routeLineString && typeof turf !== 'undefined') {
             editStops.forEach((stop, index) => {
-                const stopPoint = turf.point([stop.lat, stop.lng]);
+                const stopPoint = turf.point([stop.lng, stop.lat]);
                 const snapped = turf.nearestPointOnLine(routeLineString, stopPoint);
-                stop.shape_dist_travelled = parseFloat((snapped.properties.location * 1000).toFixed(2));
-                console.log(`[TOPOLOGY] Fermata ${index+1} proiettata a ${stop.shape_dist_travelled} metri dalla partenza`);
+                stop.shape_dist_traveled = parseFloat((snapped.properties.location * 1000).toFixed(2));
+                console.log(`[TOPOLOGY] Fermata ${index+1} proiettata a ${stop.shape_dist_traveled} metri dalla partenza`);
             });
         }
         // graphic redesign of the route on the map
