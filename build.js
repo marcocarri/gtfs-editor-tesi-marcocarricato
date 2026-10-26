@@ -35,7 +35,7 @@ const jqueryImport = '<script src="https://ajax.googleapis.com/ajax/libs/jquery/
 const turfImport = '<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>\n';
 
 // assemblaggio del file unico con l'integrazione di style.css e app.js
-const bundleContent = `${jqueryImport}{turfImport}
+const bundleContent = `${jqueryImport}${turfImport}
 ${widgetHtml}
 <style>
 ${css}
