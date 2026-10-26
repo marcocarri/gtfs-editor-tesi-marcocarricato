@@ -84,7 +84,7 @@
             for (const u of staleUris) {
                 parent.$('body').trigger({
                     type: 'removeSelectorPin',
-                    target: 'w_Map_5274_widgetMap47643',
+                    target: 'w_Map_5278_widgetMap47666',
                     passedData: {
                         query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                         desc: u,
@@ -100,7 +100,7 @@
         if (oldCoordinates && oldCoordinates.length > 0) {
             parent.$('body').trigger({
                 type: 'removeGeoInfoPin',
-                target: 'w_Map_5274_widgetMap47643',
+                target: 'w_Map_5278_widgetMap47666',
                 passedData: [{ eventType: 'GeoInfoPin', id: 'mapPoint', lat: oldCoordinates[1], lng: oldCoordinates[0], textHtml: '' }]
             });
             oldCoordinates = [];
@@ -169,7 +169,7 @@
             const uri = currentlyShowedPathsUri[i];
             parent.$('body').trigger({
                 type: 'removeBusRoute',
-                target: 'w_Map_5274_widgetMap47643',
+                target: 'w_Map_5278_widgetMap47666',
                 passedData: { desc: uri }
             });
             currentlyShowedPathsUri.splice(i, 1);
@@ -182,7 +182,7 @@
         if (!wktGeometry) return;
         parent.$('body').trigger({
             type: 'drawBusRoute',
-            target: 'w_Map_5274_widgetMap47643',
+            target: 'w_Map_5278_widgetMap47666',
             passedData: { desc: routeUri, wktGeometry, color }
         });
         currentlyShowedPathsUri.push(routeUri);
@@ -316,7 +316,7 @@
 
         parent.$('body').trigger({
             type: 'startEditTratta',
-            target: 'w_Map_5274_widgetMap47643',
+            target: 'w_Map_5278_widgetMap47666',
             passedData: { stops: stops.map(s => ({ lat: s.lat, lng: s.lng })), color: editRouteColor }
         });
 
@@ -393,7 +393,7 @@
         container.querySelector('#timeUpdateModal').style.display = 'none';
 
         // Stop LRM control
-        parent.$('body').trigger({ type: 'stopEditTratta', target: 'w_Map_5274_widgetMap47643', passedData: {} });
+        parent.$('body').trigger({ type: 'stopEditTratta', target: 'w_Map_5278_widgetMap47666', passedData: {} });
 
         // Restore normal UI
         container.querySelector('#radiusRow').style.display = 'flex';
@@ -611,7 +611,7 @@
                         for (const u of uris) {
                             parent.$('body').trigger({
                                 type: 'removeSelectorPin',
-                                target: 'w_Map_5274_widgetMap47643',
+                                target: 'w_Map_5278_widgetMap47666',
                                 passedData: {
                                     query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                                     desc: u,
@@ -660,7 +660,7 @@
                         currentlyShowedPinsUri.push(s.uri);
                         parent.$('body').trigger({
                             type: 'addSelectorPin',
-                            target: 'w_Map_5274_widgetMap47643',
+                            target: 'w_Map_5278_widgetMap47666',
                             passedData: {
                                 query: `${apiBase}?serviceUri=${encodeURIComponent(s.uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                                 targets: '',
@@ -868,7 +868,7 @@
             if (clickedUri === '' || uri !== clickedUri) {
                 parent.$('body').trigger({
                     type: 'removeSelectorPin',
-                    target: 'w_Map_5274_widgetMap47643',
+                    target: 'w_Map_5278_widgetMap47666',
                     passedData: {
                         query: `${apiBase}?serviceUri=${encodeURIComponent(uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                         desc: uri,
@@ -980,7 +980,7 @@
             currentlyShowedPinsUri.push(uri);
             parent.$('body').trigger({
                 type: 'addSelectorPin',
-                target: 'w_Map_5274_widgetMap47643',
+                target: 'w_Map_5278_widgetMap47666',
                 passedData: {
                     query: `${apiBase}?serviceUri=${encodeURIComponent(uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                     targets: '',
@@ -1029,7 +1029,7 @@
         if (oldCoordinates && oldCoordinates.length > 0) {
             parent.$('body').trigger({
                 type: 'removeGeoInfoPin',
-                target: 'w_Map_5274_widgetMap47643',
+                target: 'w_Map_5278_widgetMap47666',
                 passedData: [{ eventType: 'GeoInfoPin', id: 'mapPoint', lat: oldCoordinates[1], lng: oldCoordinates[0], textHtml: '' }]
             });
             oldCoordinates = [];
@@ -1044,7 +1044,7 @@
             for (const u of staleUris) {
                 parent.$('body').trigger({
                     type: 'removeSelectorPin',
-                    target: 'w_Map_5274_widgetMap47643',
+                    target: 'w_Map_5278_widgetMap47666',
                     passedData: {
                         query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                         desc: u,
@@ -1075,12 +1075,12 @@
         if (oldCoordinates && oldCoordinates.length > 0) {
             parent.$('body').trigger({
                 type: 'removeGeoInfoPin',
-                target: 'w_Map_5274_widgetMap47643',
+                target: 'w_Map_5278_widgetMap47666',
                 passedData: [{ "eventType": "GeoInfoPin", "id": "mapPoint", "lat": oldCoordinates[1], "lng": oldCoordinates[0], "textHtml": "" }]
             });
         }
         oldCoordinates = coords;
-        parent.$('body').trigger({ type: 'addGeoInfoPin', target: 'w_Map_5274_widgetMap47643', passedData: pin });
+        parent.$('body').trigger({ type: 'addGeoInfoPin', target: 'w_Map_5278_widgetMap47666', passedData: pin });
     };
 
     // --- INITIALIZATION ---
@@ -1128,17 +1128,6 @@
         const routeUri = e.detail.routeUri;
         const lineIndex = allLinesData.findIndex(ld => ld.routes && ld.routes.some(r => r.route === routeUri));
         if (lineIndex !== -1) handleLineClick(lineIndex);
-    });
-
-    parent.document.addEventListener('trattaRouteUpdated', (e) => {
-        if (!editMode) return;
-        showEditError(null);
-        editCurrentWkt = e.detail.wkt;
-        clearTimeout(routeUpdateTimer);
-        routeUpdateTimer = setTimeout(() => {
-            removeTrattaPaths();
-            drawRoutePath(editRouteUri, e.detail.wkt, editRouteColor);
-        }, 150);
     });
 
     parent.document.addEventListener('trattaRouteError', (e) => {
@@ -1296,7 +1285,8 @@
                 stop_lat: s.lat,
                 stop_lon: s.lng,
                 arrival_time: scheduledTime,
-                departure_time: scheduledTime
+                departure_time: scheduledTime,
+                shape_dist_traveled: s.shape_dist_traveled !== undefined ? s.shape_dist_traveled : null
             };
         });
 
@@ -1319,7 +1309,6 @@
             shape: {
                 shape_id: clonedShapeId,
                 wkt_geometry: editCurrentWkt || null
-                // TODO array dei punti e shape_dist_traveled (topologia aggiornata)
             },
             stop_times: gtfsStopTimes
         };
@@ -1328,32 +1317,39 @@
     // intercepts routing calls from map and extracts the updated waypoints without dependences from the S4C platform
     const targetWindow = parent.window || window;
     const nativeFetch = targetWindow.fetch;
+    const SNAP4CITY_ROUTING_URL = 'https://www.snap4city.org/whatif-router/route';
     targetWindow.fetch = function(...args) {
-        const url = args[0];
-        // if the call contains the waypoints it recalculate the route
-        if (typeof url === 'string' && url.includes('waypoints=')) {
-            try {
-                const match = url.match(/waypoints=([^&]+)/);
-                if (match && match[1]) {
-                    const rawPairs = decodeURIComponent(match[1]).split(';');
-                    rawPairs.forEach((pair, idx) => {
-                        const [lngStr, latStr] = pair.split(',');
-                        const lng = parseFloat(lngStr);
-                        const lat = parseFloat(latStr);
-                        // if the coordinate is valid and the stop does exists, it updates
-                        if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
-                            editStops[idx].lat = lat;
-                            editStops[idx].lng = lng;
-                        }
-                    });
-                    console.log('[INTERCEPTOR] Coordinate fermate sincronizzate con successo dai waypoints');
-                }
-            } catch (err) {
-                console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
-            }
+        let url = args[0];
+        // correct the URL on the map widget call
+        if (typeof url === 'string' && (url.startsWith('null?') || url.includes('/null?'))) {
+            url = url.replace(/.*null\?/, SNAP4CITY_ROUTING_URL + '?');
+            args[0] = url;
+            console.log('[INTERCEPTOR PROXY] URL di routing riparato ->', url);
         }
-
-        // it comes back to the normal flow of execution
+        // passive background extraction of the correct coordinates
+        setTimeout(() => {
+            if (typeof url === 'string' && url.includes('waypoints=')) {
+                try {
+                    const match = url.match(/waypoints=([^&]+)/);
+                    if (match && match[1]) {
+                        const rawPairs = decodeURIComponent(match[1]).split(';');
+                        rawPairs.forEach((pair, idx) => {
+                            const [lngStr, latStr] = pair.split(',');
+                            const lng = parseFloat(lngStr);
+                            const lat = parseFloat(latStr);
+                            if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
+                                editStops[idx].lat = lat;
+                                editStops[idx].lng = lng;
+                            }
+                        });
+                        console.log('[INTERCEPTOR] Coordinate sincronizzate correttamente');
+                    }
+                } catch (err) {
+                    console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
+                }
+            }
+        }, 0);
+        // return the native fetch intact with the correct URL to the map widget
         return nativeFetch.apply(this, args);
     };
 
@@ -1366,6 +1362,39 @@
     } catch (err) {
         console.warn('Impossibile accedere allo scope del parent per dashboardParams', err);
     }
+
+    parent.document.addEventListener('trattaRouteUpdated', (e) => {
+        if (!editMode) return;
+        showEditError(null);
+        editCurrentWkt = e.detail.wkt;
+        // parsing of the WKT geometry to GeoJSON format for Turf.js
+        let routeLineString = null;
+        try {
+            const coordsString =  editCurrentWkt.replace('LINESTRING','').replace('(','').replace(')','').trim();
+            const coordsArray = coordsString.split(',').map(pair => {
+                const [lng, lat] = pair.trim().split(' ').map(Number);
+                return [lng, lat];
+            });
+            routeLineString = turf.lineString(coordsArray);
+        } catch(err) {
+            console.warn('[TOPOLOGY] Errore nel parsing WKT per Turf.js:', err);
+        }
+        // calculation of the cumulative distance for each stop
+        if (routeLineString && typeof turf !== 'undefined') {
+            editStops.forEach((stop, index) => {
+                const stopPoint = turf.point([stop.lng, stop.lat]);
+                const snapped = turf.nearestPointOnLine(routeLineString, stopPoint);
+                stop.shape_dist_traveled = parseFloat((snapped.properties.location * 1000).toFixed(2));
+                console.log(`[TOPOLOGY] Fermata ${index+1} proiettata a ${stop.shape_dist_traveled} metri dalla partenza`);
+            });
+        }
+        // graphic redesign of the route on the map
+        clearTimeout(routeUpdateTimer);
+        routeUpdateTimer = setTimeout(() => {
+            removeTrattaPaths();
+            drawRoutePath(editRouteUri, e.detail.wkt, editRouteColor);
+        }, 150);
+    });
 
     // ----------------------------------
     // - CUSTOM MODULES: THESIS -  END  -
