@@ -1130,17 +1130,6 @@
         if (lineIndex !== -1) handleLineClick(lineIndex);
     });
 
-    /*parent.document.addEventListener('trattaRouteUpdated', (e) => {
-        if (!editMode) return;
-        showEditError(null);
-        editCurrentWkt = e.detail.wkt;
-        clearTimeout(routeUpdateTimer);
-        routeUpdateTimer = setTimeout(() => {
-            removeTrattaPaths();
-            drawRoutePath(editRouteUri, e.detail.wkt, editRouteColor);
-        }, 150);
-    });*/
-
     parent.document.addEventListener('trattaRouteError', (e) => {
         if (!editMode) return;
         showEditError(e.detail?.message || 'Errore di routing: il server non risponde');
