@@ -1130,7 +1130,7 @@
         if (lineIndex !== -1) handleLineClick(lineIndex);
     });
 
-    parent.document.addEventListener('trattaRouteUpdated', (e) => {
+    /*parent.document.addEventListener('trattaRouteUpdated', (e) => {
         if (!editMode) return;
         showEditError(null);
         editCurrentWkt = e.detail.wkt;
@@ -1139,14 +1139,12 @@
             removeTrattaPaths();
             drawRoutePath(editRouteUri, e.detail.wkt, editRouteColor);
         }, 150);
-    });
+    });*/
 
-    /* FUNZIONE RIFATTA
     parent.document.addEventListener('trattaRouteError', (e) => {
         if (!editMode) return;
         showEditError(e.detail?.message || 'Errore di routing: il server non risponde');
     });
-    */
 
     parent.document.addEventListener('editStopMoved', (e) => {
         if (!editMode) return;
@@ -1330,9 +1328,16 @@
     // intercepts routing calls from map and extracts the updated waypoints without dependences from the S4C platform
     const targetWindow = parent.window || window;
     const nativeFetch = targetWindow.fetch;
+    const SNAP4CITY_ROUTING_URL = 'https://www.snap4city.org/whatif-router/route';
     targetWindow.fetch = function(...args) {
-        const url = args[0];
-        // passive and parallel execution: it doesn't stop the network flow
+        let url = args[0];
+        // correct the URL on the map widget call
+        if (typeof url === 'string' && (url.startsWith('null?') || url.includes('/null?'))) {
+            url = url.replace(/.*null\?/, SNAP4CITY_ROUTING_URL + '?');
+            args[0] = url;
+            console.log('[INTERCEPTOR PROXY] URL di routing riparato ->', url);
+        }
+        // passive background extraction of the correct coordinates
         setTimeout(() => {
             if (typeof url === 'string' && url.includes('waypoints=')) {
                 try {
@@ -1348,14 +1353,14 @@
                                 editStops[idx].lng = lng;
                             }
                         });
-                        console.log('[INTERCEPTOR] Coordinate sincronizzate in background');
+                        console.log('[INTERCEPTOR] Coordinate sincronizzate correttamente');
                     }
                 } catch (err) {
                     console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
                 }
             }
         }, 0);
-        // return the native fetch intact to the map widget
+        // return the native fetch intact with the correct URL to the map widget
         return nativeFetch.apply(this, args);
     };
 
