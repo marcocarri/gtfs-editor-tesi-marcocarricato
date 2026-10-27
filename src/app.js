@@ -266,6 +266,11 @@
         // Keep a mutable copy — coordinates updated when markers are dragged
         editStops = stops.map(s => ({ ...s }));
 
+        // preliminary calculation of the distances between stops
+        if (editCurrentWkt) {
+            computeStopsDistances(editCurrentWkt, editStops);
+        }
+
         // Populate edit stop list — each row has the stop name and a time placeholder
         const editList = container.querySelector('#editStopsList');
         editList.innerHTML = '';
@@ -1335,8 +1340,8 @@
                         const rawPairs = decodeURIComponent(match[1]).split(';');
                         rawPairs.forEach((pair, idx) => {
                             const [lngStr, latStr] = pair.split(',');
-                            const lng = parseFloat(lngStr);
-                            const lat = parseFloat(latStr);
+                            const lng = parseFloat(parseFloat(lngStr).toFixed(6));
+                            const lat = parseFloat(parseFloat(latStr).toFixed(6));
                             if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
                                 editStops[idx].lat = lat;
                                 editStops[idx].lng = lng;
@@ -1363,31 +1368,33 @@
         console.warn('Impossibile accedere allo scope del parent per dashboardParams', err);
     }
 
+    // modular calculation of the progressive distances of the stops along the WKT route
+    const computeStopsDistances = (wktString, stopsArray) => {
+        if (!wktString || !stopsArray || stopsArray.length === 0 || typeof turf === 'undefined') return;
+        try {
+            const coordsString = wktString.replace('LINESTRING', '').replace('(', '').replace(')', '').trim();
+            const coordsArray = coordsString.split(',').map(pair => {
+                const [lng, lat] = pair.trim().split(' ').map(Number);
+                return [lng, lat];
+            });
+            const routeLineString = turf.lineString(coordsArray);
+            stopsArray.forEach((stop) => {
+                const stopPoint = turf.point([stop.lng, stop.lat]);
+                const snapped = turf.nearestPointOnLine(routeLineString, stopPoint);
+                stop.shape_dist_traveled = parseFloat((snapped.properties.location * 1000).toFixed(2));
+            });
+            console.log('[TOPOLOGY] Distanze calcolate per tutte le fermate.');
+        } catch (err) {
+            console.warn('[TOPOLOGY] Errore calcolo distanze:', err);
+        }
+    };
+
     parent.document.addEventListener('trattaRouteUpdated', (e) => {
         if (!editMode) return;
         showEditError(null);
         editCurrentWkt = e.detail.wkt;
         // parsing of the WKT geometry to GeoJSON format for Turf.js
-        let routeLineString = null;
-        try {
-            const coordsString =  editCurrentWkt.replace('LINESTRING','').replace('(','').replace(')','').trim();
-            const coordsArray = coordsString.split(',').map(pair => {
-                const [lng, lat] = pair.trim().split(' ').map(Number);
-                return [lng, lat];
-            });
-            routeLineString = turf.lineString(coordsArray);
-        } catch(err) {
-            console.warn('[TOPOLOGY] Errore nel parsing WKT per Turf.js:', err);
-        }
-        // calculation of the cumulative distance for each stop
-        if (routeLineString && typeof turf !== 'undefined') {
-            editStops.forEach((stop, index) => {
-                const stopPoint = turf.point([stop.lng, stop.lat]);
-                const snapped = turf.nearestPointOnLine(routeLineString, stopPoint);
-                stop.shape_dist_traveled = parseFloat((snapped.properties.location * 1000).toFixed(2));
-                console.log(`[TOPOLOGY] Fermata ${index+1} proiettata a ${stop.shape_dist_traveled} metri dalla partenza`);
-            });
-        }
+        computeStopsDistances(editCurrentWkt, editStops);
         // graphic redesign of the route on the map
         clearTimeout(routeUpdateTimer);
         routeUpdateTimer = setTimeout(() => {
