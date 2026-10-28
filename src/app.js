@@ -84,7 +84,7 @@
             for (const u of staleUris) {
                 parent.$('body').trigger({
                     type: 'removeSelectorPin',
-                    target: 'w_Map_5278_widgetMap47666',
+                    target: 'w_Map_5280_widgetMap47691',
                     passedData: {
                         query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                         desc: u,
@@ -100,7 +100,7 @@
         if (oldCoordinates && oldCoordinates.length > 0) {
             parent.$('body').trigger({
                 type: 'removeGeoInfoPin',
-                target: 'w_Map_5278_widgetMap47666',
+                target: 'w_Map_5280_widgetMap47691',
                 passedData: [{ eventType: 'GeoInfoPin', id: 'mapPoint', lat: oldCoordinates[1], lng: oldCoordinates[0], textHtml: '' }]
             });
             oldCoordinates = [];
@@ -169,7 +169,7 @@
             const uri = currentlyShowedPathsUri[i];
             parent.$('body').trigger({
                 type: 'removeBusRoute',
-                target: 'w_Map_5278_widgetMap47666',
+                target: 'w_Map_5280_widgetMap47691',
                 passedData: { desc: uri }
             });
             currentlyShowedPathsUri.splice(i, 1);
@@ -182,7 +182,7 @@
         if (!wktGeometry) return;
         parent.$('body').trigger({
             type: 'drawBusRoute',
-            target: 'w_Map_5278_widgetMap47666',
+            target: 'w_Map_5280_widgetMap47691',
             passedData: { desc: routeUri, wktGeometry, color }
         });
         currentlyShowedPathsUri.push(routeUri);
@@ -321,7 +321,7 @@
 
         parent.$('body').trigger({
             type: 'startEditTratta',
-            target: 'w_Map_5278_widgetMap47666',
+            target: 'w_Map_5280_widgetMap47691',
             passedData: { stops: stops.map(s => ({ lat: s.lat, lng: s.lng })), color: editRouteColor }
         });
 
@@ -398,7 +398,7 @@
         container.querySelector('#timeUpdateModal').style.display = 'none';
 
         // Stop LRM control
-        parent.$('body').trigger({ type: 'stopEditTratta', target: 'w_Map_5278_widgetMap47666', passedData: {} });
+        parent.$('body').trigger({ type: 'stopEditTratta', target: 'w_Map_5280_widgetMap47691', passedData: {} });
 
         // Restore normal UI
         container.querySelector('#radiusRow').style.display = 'flex';
@@ -616,7 +616,7 @@
                         for (const u of uris) {
                             parent.$('body').trigger({
                                 type: 'removeSelectorPin',
-                                target: 'w_Map_5278_widgetMap47666',
+                                target: 'w_Map_5280_widgetMap47691',
                                 passedData: {
                                     query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                                     desc: u,
@@ -665,7 +665,7 @@
                         currentlyShowedPinsUri.push(s.uri);
                         parent.$('body').trigger({
                             type: 'addSelectorPin',
-                            target: 'w_Map_5278_widgetMap47666',
+                            target: 'w_Map_5280_widgetMap47691',
                             passedData: {
                                 query: `${apiBase}?serviceUri=${encodeURIComponent(s.uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                                 targets: '',
@@ -873,7 +873,7 @@
             if (clickedUri === '' || uri !== clickedUri) {
                 parent.$('body').trigger({
                     type: 'removeSelectorPin',
-                    target: 'w_Map_5278_widgetMap47666',
+                    target: 'w_Map_5280_widgetMap47691',
                     passedData: {
                         query: `${apiBase}?serviceUri=${encodeURIComponent(uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                         desc: uri,
@@ -985,7 +985,7 @@
             currentlyShowedPinsUri.push(uri);
             parent.$('body').trigger({
                 type: 'addSelectorPin',
-                target: 'w_Map_5278_widgetMap47666',
+                target: 'w_Map_5280_widgetMap47691',
                 passedData: {
                     query: `${apiBase}?serviceUri=${encodeURIComponent(uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                     targets: '',
@@ -1034,7 +1034,7 @@
         if (oldCoordinates && oldCoordinates.length > 0) {
             parent.$('body').trigger({
                 type: 'removeGeoInfoPin',
-                target: 'w_Map_5278_widgetMap47666',
+                target: 'w_Map_5280_widgetMap47691',
                 passedData: [{ eventType: 'GeoInfoPin', id: 'mapPoint', lat: oldCoordinates[1], lng: oldCoordinates[0], textHtml: '' }]
             });
             oldCoordinates = [];
@@ -1049,7 +1049,7 @@
             for (const u of staleUris) {
                 parent.$('body').trigger({
                     type: 'removeSelectorPin',
-                    target: 'w_Map_5278_widgetMap47666',
+                    target: 'w_Map_5280_widgetMap47691',
                     passedData: {
                         query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                         desc: u,
@@ -1080,12 +1080,12 @@
         if (oldCoordinates && oldCoordinates.length > 0) {
             parent.$('body').trigger({
                 type: 'removeGeoInfoPin',
-                target: 'w_Map_5278_widgetMap47666',
+                target: 'w_Map_5280_widgetMap47691',
                 passedData: [{ "eventType": "GeoInfoPin", "id": "mapPoint", "lat": oldCoordinates[1], "lng": oldCoordinates[0], "textHtml": "" }]
             });
         }
         oldCoordinates = coords;
-        parent.$('body').trigger({ type: 'addGeoInfoPin', target: 'w_Map_5278_widgetMap47666', passedData: pin });
+        parent.$('body').trigger({ type: 'addGeoInfoPin', target: 'w_Map_5280_widgetMap47691', passedData: pin });
     };
 
     // --- INITIALIZATION ---
