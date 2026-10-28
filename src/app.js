@@ -1403,6 +1403,28 @@
         }, 150);
     });
 
+
+    // benchmark const values
+    const DEFAULT_URBAN_SPEED_MPS = 4.44; // 16km/h --> 4.4m/s
+    const DWELL_TIME_SECONDS = 15;        // standard dwell time at the bus stop
+
+    // converts a time string into an integer number of seconds
+    const timeStringToSeconds = (timeStr) => {
+        if (!timeStr) return null;
+        const parts = timeStr.split(':').map(Number);
+        if (parts.length === 2) return parts[0] * 3600 + parts[1] * 60;
+        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        return null;
+    };
+
+    // converts an integer number of seconds into a time string
+    const secondsToTimeString = (totalSecs) => {
+        if (totalSecs === null || isNaN(totalSecs)) return null;
+        const hours = Math.floor(totalSecs / 3600);
+        const minutes = Math.floor((totalSecs % 3600) / 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    };
+
     // ----------------------------------
     // - CUSTOM MODULES: THESIS -  END  -
     // ----------------------------------
