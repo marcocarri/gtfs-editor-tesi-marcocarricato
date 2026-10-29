@@ -381,15 +381,18 @@
             }
 
             //CUSTOM THESIS MODULE - START
-            // auto-space-time-interpolation
-            interpolateTimetable(editStops, stopCurrentTimes);
-            // grapich update in user's interface
-            editStops.forEach((s, idx) => {
-                const timeSpan = container.querySelector(`#editStopTime-${idx}`);
-                if (timeSpan && stopCurrentTimes[idx]) {
-                    timeSpan.textContent = stopCurrentTimes[idx];
-                    timeSpan.style.cssText = `font-size: 0.8rem !important; white-space: nowrap !important; font-weight: 600 !important; color: ${editRouteColor} !important;`;
-                }
+            // background OSM data fetch
+            fetchOsmTransitData(editStops, editRouteUri).then(osmData => {
+                // auto-space-time-interpolation
+                interpolateTimetable(editStops, stopCurrentTimes, 0, osmData);
+                // grapich update in user's interface
+                editStops.forEach((s, idx) => {
+                    const timeSpan = container.querySelector(`#editStopTime-${idx}`);
+                    if (timeSpan && stopCurrentTimes[idx]) {
+                        timeSpan.textContent = stopCurrentTimes[idx];
+                        timeSpan.style.cssText = `font-size: 0.8rem !important; white-space: nowrap !important; font-weight: 600 !important; color: ${editRouteColor} !important;`;
+                    }
+                });
             });
             // COSTUM THESIS MODULE - END
 
@@ -1413,7 +1416,7 @@
         computeStopsDistances(editCurrentWkt, editStops);
         // auto-space-time-interpolation
         const fromIndex = activeEditStopIndex > 0 ? activeEditStopIndex : 0;
-        interpolateTimetable(editStops, stopCurrentTimes, fromIndex);
+        interpolateTimetable(editStops, stopCurrentTimes, fromIndex, osmRouteCache);
         // grapich update in user's interface
         editStops.forEach((s, idx) => {
             const el = container.querySelector(`#editStopTime-${idx}`);
@@ -1437,6 +1440,10 @@
     // benchmark const values
     const DEFAULT_URBAN_SPEED_MPS = 4.44; // 16km/h --> 4.4m/s
     const DWELL_TIME_SECONDS = 15;        // standard dwell time at the bus stop
+    // physical constraints on the commercial speed of public transport
+    const SPEED_LIMIT_MIN_MPS = 0.83;     // ~3 km/h (minimum congestion threshold)
+    const SPEED_LIMIT_MAX_MPS = 13.88;    // ~50 km/h (urban legal limit)
+
     // converts a time string into an integer number of seconds
     const timeStringToSeconds = (timeStr) => {
         if (!timeStr) return null;
@@ -1453,8 +1460,67 @@
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     };
 
+    // local chache to avoid flooding Overpass API
+    let osmRouteCache = {
+        routeUri: null,
+        hasBusLane: false,
+        roadWeights: []
+    };
+
+    // calculates the geographic bounding box for a set of stops
+    const computeBoundingBox = (stops) => {
+        let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+        stops.forEach(s => {
+            if (s.lat < minLat) minLat = s.lat;
+            if (s.lat > maxLat) maxLat = s.lat;
+            if (s.lng < minLng) minLng = s.lng;
+            if (s.lng > maxLng) maxLng = s.lng;
+        });
+        // margin of tolerance (~200m)
+        return `${minLat - 0.002},${minLng - 0.002},${maxLat + 0.002},${maxLng + 0.002}`;
+    };
+
+    // queries the OpenStreetMap Overpass API to detect priority lanes
+    const fetchOsmTransitData = async (stops, routeUri) => {
+        if (osmRouteCache.routeUri === routeUri) return osmRouteCache;
+        const bbox = computeBoundingBox(stops);
+        // look for roads with dedicated bus lanes within the area covered by the route
+        const overpassQuery = `[out:json][timeout:5];(way["lanes:bus"](${bbox});way["highway"="busway"](${bbox}););out tags;`;
+        const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+        try {
+            const response = await fetch(overpassUrl);
+            const data = await response.json();
+            const hasBusLane = data && data.elements && data.elements.length > 0;
+            console.log(`[OSM] Corsie preferenziali rilevate: ${hasBusLane ? 'SÌ' : 'NO'}`);
+            osmRouteCache = {
+                routeUri: routeUri,
+                hasBusLane: hasBusLane
+            };
+        } catch (err) {
+            console.warn('[OSM] Overpass API non raggiungibile o rate-limited. Fallback attivo:', err);
+            osmRouteCache = { routeUri: routeUri, hasBusLane: false };
+        }
+        return osmRouteCache;
+    };
+
+    // calculate the speed weight for a segment between stop k-1 and stop k
+    const getSegmentSpeedWeight = (prevStop, currStop, hasBusLane) => {
+        let weight = 1.0; // baseline (urban standard)
+        if (hasBusLane) {
+            weight *= 1.25; // dedicated bus lanes bonus (+25%)
+        }
+        // heuristic weighting based on node spacing: if stops are very close together, we are in an area that entails slower movement speeds
+        const segmentDist = Math.max(0, (currStop.shape_dist_traveled || 0) - (prevStop.shape_dist_traveled || 0));
+        if (segmentDist > 0 && segmentDist < 250) {
+            weight *= 0.85; // stop close together malus (-15%)
+        } else if (segmentDist > 800) {
+            weight *= 1.15; //stops far away bonus (extra-urban/high-speed road) (+15%)
+        }
+        return weight;
+    };
+
     // interpolates proportionally the time stamps in a trip using the cumulative distances calculated using Turf.js
-    const interpolateTimetable = (stops, currentTimes, startIndex = 0) => {
+    const interpolateTimetable = (stops, currentTimes, startIndex = 0, osmData = null) => {
         if (!stops || stops.length === 0) return;
         // ensure that the first stop has a valid departure time
         if (!currentTimes[0]) {
@@ -1462,6 +1528,7 @@
         }
         // checks if startIndex>0, if so, it means the bus stop was moved; if not, we are interpolating the missing time gaps at start
         const start = Math.max(1, startIndex);
+        const hasBusLane = osmData ? osmData.hasBusLane : false;
         for (let k = start; k < stops.length; k++) {
             // if startIndex===0 and the time already exists, do not overwrite the key points
             if (startIndex === 0 && currentTimes[k] && currentTimes[k] !== '-') {
@@ -1472,11 +1539,17 @@
             const segmentMeters = Math.max(0, currDist - prevDist);
             const prevSecs = timeStringToSeconds(currentTimes[k - 1]);
             if (prevSecs === null) continue;
-            // travel time = (space / speed) + stop dwell time
-            const runningSecs = Math.round(segmentMeters / DEFAULT_URBAN_SPEED_MPS);
+            // heteregeneous segment weighting (OSM-based)
+            const weight = getSegmentSpeedWeight(stops[k - 1], stops[k], hasBusLane);
+            let effectiveSpeed = DEFAULT_URBAN_SPEED_MPS * weight;
+            // plausability filter (clamping) (it prevents the speed from dropping below a walking pace or exceeding legal limits)
+            if (effectiveSpeed < SPEED_LIMIT_MIN_MPS) effectiveSpeed = SPEED_LIMIT_MIN_MPS;
+            if (effectiveSpeed > SPEED_LIMIT_MAX_MPS) effectiveSpeed = SPEED_LIMIT_MAX_MPS;
+            // calculating travel time using checked data
+            const runningSecs = Math.round(segmentMeters / effectiveSpeed);
             const currSecs = prevSecs + runningSecs + DWELL_TIME_SECONDS;
             currentTimes[k] = secondsToTimeString(currSecs);
-            console.log(`[TIMETABLE] Fermata ${k + 1} calcolata a: ${currentTimes[k]} (+${segmentMeters}m)`);
+            console.log(`[TIMETABLE OSM] Fermata ${k + 1} calcolata a: ${currentTimes[k]} (v: ${(effectiveSpeed * 3.6).toFixed(1)} km/h, w: ${weight.toFixed(2)})`);
         }
     };
 
