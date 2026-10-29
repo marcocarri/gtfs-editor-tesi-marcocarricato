@@ -1485,36 +1485,47 @@
         if (osmRouteCache.routeUri === routeUri) return osmRouteCache;
         const bbox = computeBoundingBox(stops);
         // look for roads with dedicated bus lanes within the area covered by the route
-        const overpassQuery = `[out:json][timeout:5];(way["lanes:bus"](${bbox});way["highway"="busway"](${bbox}););out tags;`;
+        const overpassQuery = `[out:json][timeout:10];(way["lanes:bus"](${bbox});way["highway"="busway"](${bbox}););out geom;`;
         const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+        let totalBusLaneMeters = 0;
         try {
             const response = await fetch(overpassUrl);
             const data = await response.json();
-            const hasBusLane = data && data.elements && data.elements.length > 0;
-            console.log(`[OSM] Corsie preferenziali rilevate: ${hasBusLane ? 'SÌ' : 'NO'}`);
+            if (data && data.elements && data.elements.length > 0) {
+                data.elements.forEach(element => {
+                    if (element.geometry && element.geometry.length > 1) {
+                        // converts the OSM coordinates in GeoJSON format for Turf.js to get the bus lanes length
+                        const coords = element.geometry.map(pt => [pt.lon, pt.lat]);
+                        const line = turf.lineString(coords);
+                        totalBusLaneMeters += turf.length(line, { units: 'meters' });
+                    }
+                });
+            }
+            console.log(`[OSM] Corsie bus rilevate: ${totalBusLaneMeters > 0 ? Math.round(totalBusLaneMeters) + ' metri' : 'Nessuna'}`);
             osmRouteCache = {
                 routeUri: routeUri,
-                hasBusLane: hasBusLane
+                busLaneMeters: totalBusLaneMeters
             };
         } catch (err) {
             console.warn('[OSM] Overpass API non raggiungibile o rate-limited. Fallback attivo:', err);
-            osmRouteCache = { routeUri: routeUri, hasBusLane: false };
+            osmRouteCache = { routeUri: routeUri, busLaneMeters: 0 };
         }
         return osmRouteCache;
     };
 
     // calculate the speed weight for a segment between stop k-1 and stop k
-    const getSegmentSpeedWeight = (prevStop, currStop, hasBusLane) => {
+    const getSegmentSpeedWeight = (prevStop, currStop, busLaneMeters) => {
         let weight = 1.0; // baseline (urban standard)
-        if (hasBusLane) {
-            weight *= 1.25; // dedicated bus lanes bonus (+25%)
+        if (busLaneMeters > 0 && segmentDist > 0) { // dedicated bus lanes bonus, weighted by the impact of the lane on the segment (+25% * [0;1])
+            const coverageRatio = Math.min(1.0, busLaneMeters / segmentDist);
+            weight += (0.25 * coverageRatio);
         }
         // heuristic weighting based on node spacing: if stops are very close together, we are in an area that entails slower movement speeds
         const segmentDist = Math.max(0, (currStop.shape_dist_traveled || 0) - (prevStop.shape_dist_traveled || 0));
         if (segmentDist > 0 && segmentDist < 250) {
             weight *= 0.85; // stop close together malus (-15%)
         } else if (segmentDist > 800) {
-            weight *= 1.15; //stops far away bonus (extra-urban/high-speed road) (+15%)
+            weight *= 1.15; // stops far away bonus (extra-urban/high-speed road) (+15%)
         }
         return weight;
     };
