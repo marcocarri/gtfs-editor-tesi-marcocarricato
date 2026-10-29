@@ -382,7 +382,7 @@
 
             //CUSTOM THESIS MODULE - START
             // auto-space-time-interpolation
-            interpolateTimetableGaps(editStops, stopCurrentTimes);
+            interpolateTimetable(editStops, stopCurrentTimes);
             // grapich update in user's interface
             editStops.forEach((s, idx) => {
                 const timeSpan = container.querySelector(`#editStopTime-${idx}`);
@@ -1412,13 +1412,18 @@
         // parsing of the WKT geometry to GeoJSON format for Turf.js
         computeStopsDistances(editCurrentWkt, editStops);
         // auto-space-time-interpolation
-        interpolateTimetableGaps(editStops, stopCurrentTimes);
+        const fromIndex = activeEditStopIndex > 0 ? activeEditStopIndex : 0;
+        interpolateTimetable(editStops, stopCurrentTimes, fromIndex);
         // grapich update in user's interface
         editStops.forEach((s, idx) => {
-            const timeSpan = container.querySelector(`#editStopTime-${idx}`);
-            if (timeSpan && stopCurrentTimes[idx]) {
-                timeSpan.textContent = stopCurrentTimes[idx];
-                timeSpan.style.cssText = `font-size: 0.8rem !important; white-space: nowrap !important; font-weight: 600 !important; color: ${editRouteColor} !important;`;
+            const el = container.querySelector(`#editStopTime-${idx}`);
+            if (el && stopCurrentTimes[idx]) {
+                if (el.tagName === 'INPUT') {
+                    el.value = stopCurrentTimes[idx];
+                } else {
+                    el.textContent = stopCurrentTimes[idx];
+                    el.style.cssText = `font-size: 0.8rem !important; white-space: nowrap !important; font-weight: 600 !important; color: ${editRouteColor} !important;`;
+                }
             }
         });
         // graphic redesign of the route on the map
@@ -1448,54 +1453,30 @@
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     };
 
-    // interpolates proportionally the time gaps in a trip using the cumulative distances calculated using Turf.js
-    const interpolateTimetableGaps = (stops, currentTimes) => {
+    // interpolates proportionally the time stamps in a trip using the cumulative distances calculated using Turf.js
+    const interpolateTimetable = (stops, currentTimes, startIndex = 0) => {
         if (!stops || stops.length === 0) return;
-        console.log('[TIMETABLE] Avvio interpolazione spazio-temporale');
         // ensure that the first stop has a valid departure time
         if (!currentTimes[0]) {
             currentTimes[0] = "08:00"; // deterministic default fallback
         }
-        let i = 0;
-        while (i < stops.length - 1) {
-            // finds the next known reference point (B) with a valid timetable
-            let nextKnownIndex = -1;
-            for (let j = i + 1; j < stops.length; j++) {
-                if (currentTimes[j] !== null && currentTimes[j] !== undefined && currentTimes[j] !== '-') {
-                    nextKnownIndex = j;
-                    break;
-                }
+        // checks if startIndex>0, if so, it means the bus stop was moved; if not, we are interpolating the missing time gaps at start
+        const start = Math.max(1, startIndex);
+        for (let k = start; k < stops.length; k++) {
+            // if startIndex===0 and the time already exists, do not overwrite the key points
+            if (startIndex === 0 && currentTimes[k] && currentTimes[k] !== '-') {
+                continue;
             }
-            const tA = timeStringToSeconds(currentTimes[i]);
-            const sA = stops[i].shape_dist_traveled || 0;
-            if (nextKnownIndex !== -1) { // closed window [A -> B] (both times known)
-                const tB = timeStringToSeconds(currentTimes[nextKnownIndex]);
-                const sB = stops[nextKnownIndex].shape_dist_traveled || sA;
-                const deltaDist = sB - sA;
-                const deltaTime = tB - tA;
-                // proportional calculation for every stops between A and B
-                for (let k = i + 1; k < nextKnownIndex; k++) {
-                    const sK = stops[k].shape_dist_traveled || sA;
-                    const ratio = deltaDist > 0 ? (sK - sA) / deltaDist : 0;
-                    const tK = Math.round(tA + ratio * deltaTime);
-                    currentTimes[k] = secondsToTimeString(tK);
-                    console.log(`[TIMETABLE] Fermata ${k + 1} interpolata (chiusa): ${currentTimes[k]}`);
-                }
-                i = nextKnownIndex;
-            } else { // open window [A -> end of bus route] (all subsequent keypoints are missing)
-                for (let k = i + 1; k < stops.length; k++) {
-                    const prevDist = stops[k - 1].shape_dist_traveled || 0;
-                    const currDist = stops[k].shape_dist_traveled || prevDist;
-                    const segmentMeters = Math.max(0, currDist - prevDist);
-                    // travel time = space / speed + stop dwell time
-                    const runningSecs = Math.round(segmentMeters / DEFAULT_URBAN_SPEED_MPS);
-                    const prevSecs = timeStringToSeconds(currentTimes[k - 1]);
-                    const currSecs = prevSecs + runningSecs + DWELL_TIME_SECONDS;
-                    currentTimes[k] = secondsToTimeString(currSecs);
-                    console.log(`[TIMETABLE] Fermata ${k + 1} calcolata (aperta a ${DEFAULT_URBAN_SPEED_MPS} m/s): ${currentTimes[k]}`);
-                }
-                break;
-            }
+            const prevDist = stops[k - 1].shape_dist_traveled || 0;
+            const currDist = stops[k].shape_dist_traveled || prevDist;
+            const segmentMeters = Math.max(0, currDist - prevDist);
+            const prevSecs = timeStringToSeconds(currentTimes[k - 1]);
+            if (prevSecs === null) continue;
+            // travel time = (space / speed) + stop dwell time
+            const runningSecs = Math.round(segmentMeters / DEFAULT_URBAN_SPEED_MPS);
+            const currSecs = prevSecs + runningSecs + DWELL_TIME_SECONDS;
+            currentTimes[k] = secondsToTimeString(currSecs);
+            console.log(`[TIMETABLE] Fermata ${k + 1} calcolata a: ${currentTimes[k]} (+${segmentMeters}m)`);
         }
     };
 
