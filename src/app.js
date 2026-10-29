@@ -163,7 +163,6 @@
         if (content) content.style.display = 'block';
     };
 
-
     const removeTrattaPaths = () => {
         for (let i = currentlyShowedPathsUri.length - 1; i >= 0; i--) {
             const uri = currentlyShowedPathsUri[i];
