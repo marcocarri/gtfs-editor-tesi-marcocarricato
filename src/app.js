@@ -1437,11 +1437,17 @@
     });
 
     // benchmark const values
-    const DEFAULT_URBAN_SPEED_MPS = 4.44; // 16km/h --> 4.4m/s
-    const DWELL_TIME_SECONDS = 15;        // standard dwell time at the bus stop
+    const DEFAULT_URBAN_SPEED_MPS = 4.44;       // 16km/h --> 4.4m/s
+    const DWELL_TIME_SECONDS = 15;              // standard dwell time at the bus stop
     // physical constraints on the commercial speed of public transport
-    const SPEED_LIMIT_MIN_MPS = 0.83;     // ~3 km/h (minimum congestion threshold)
-    const SPEED_LIMIT_MAX_MPS = 13.88;    // ~50 km/h (urban legal limit)
+    const SPEED_LIMIT_MIN_MPS = 0.83;           // ~3 km/h (minimum congestion threshold)
+    const SPEED_LIMIT_URBAN_MAX_MPS = 13.88;    // ~50 km/h (urban legal limit)
+    const SPEED_LIMIT_EXTRA_MAX_MPS = 22.22;    // ~80 km/h (extra-urban legal limit)
+    const SPEED_LIMIT_HIGHWAY_MAX_MPS = 27.78;  // ~100 km/h (highway legal limit)
+    // metric thresholds for spacing between stops (meters)
+    const REGIME_URBAN_DENSE_THRESHOLD = 300;
+    const REGIME_EXTRAURBAN_THRESHOLD = 1200;
+    const REGIME_HIGHWAY_THRESHOLD = 4000;
 
     // converts a time string into an integer number of seconds
     const timeStringToSeconds = (timeStr) => {
@@ -1521,10 +1527,14 @@
         }
         // heuristic weighting based on node spacing: if stops are very close together, we are in an area that entails slower movement speeds
         const segmentDist = Math.max(0, (currStop.shape_dist_traveled || 0) - (prevStop.shape_dist_traveled || 0));
-        if (segmentDist > 0 && segmentDist < 250) {
-            weight *= 0.85; // stop close together malus (-15%)
-        } else if (segmentDist > 800) {
-            weight *= 1.15; // stops far away bonus (extra-urban/high-speed road) (+15%)
+        if (segmentDist > 0 && segmentDist < REGIME_URBAN_DENSE_THRESHOLD) {
+            weight *= 0.80; // urban dense
+        }  else if (segmentDist > 700) {
+            weight *= 1.15; // urban NOT dense
+        } else if (segmentDist >= REGIME_EXTRAURBAN_THRESHOLD) {
+            weight *= 2.50; // extra-urban
+        } else if (segmentDist >= REGIME_HIGHWAY_THRESHOLD) {
+            weight *= 4.50; // highway
         }
         return weight;
     };
@@ -1552,14 +1562,25 @@
             // heteregeneous segment weighting (OSM-based)
             const weight = getSegmentSpeedWeight(stops[k - 1], stops[k], hasBusLane);
             let effectiveSpeed = DEFAULT_URBAN_SPEED_MPS * weight;
-            // plausability filter (clamping) (it prevents the speed from dropping below a walking pace or exceeding legal limits)
+            // dynamic speed ceiling selection
+            let currentSpeedCeiling = SPEED_LIMIT_URBAN_MAX_MPS;
+            let regimeLabel = 'URBAN';
+            if (segmentMeters >= REGIME_EXTRAURBAN_THRESHOLD) {
+                currentSpeedCeiling = SPEED_LIMIT_EXTRA_MAX_MPS;
+                regimeLabel = 'EXTRA';
+            }
+            else if (segmentMeters >= REGIME_HIGHWAY_THRESHOLD) {
+                currentSpeedCeiling = SPEED_LIMIT_HIGHWAY_MAX_MPS;
+                regimeLabel = 'HIGHWAY';
+            }
+            // plausibility filter (dynamic clamping): prevents speed dropping below walking pace or exceeding regime legal limits
             if (effectiveSpeed < SPEED_LIMIT_MIN_MPS) effectiveSpeed = SPEED_LIMIT_MIN_MPS;
-            if (effectiveSpeed > SPEED_LIMIT_MAX_MPS) effectiveSpeed = SPEED_LIMIT_MAX_MPS;
+            if (effectiveSpeed > currentSpeedCeiling) effectiveSpeed = currentSpeedCeiling;
             // calculating travel time using checked data
             const runningSecs = Math.round(segmentMeters / effectiveSpeed);
             const currSecs = prevSecs + runningSecs + DWELL_TIME_SECONDS;
             currentTimes[k] = secondsToTimeString(currSecs);
-            console.log(`[TIMETABLE OSM] Fermata ${k + 1} calcolata a: ${currentTimes[k]} (v: ${(effectiveSpeed * 3.6).toFixed(1)} km/h, w: ${weight.toFixed(2)})`);
+            console.log(`[TIMETABLE ${regimeLabel}] Fermata ${k + 1} (${segmentMeters}m) calcolata a: ${currentTimes[k]} (v: ${(effectiveSpeed * 3.6).toFixed(1)} km/h, w: ${weight.toFixed(2)})`);
         }
     };
 
