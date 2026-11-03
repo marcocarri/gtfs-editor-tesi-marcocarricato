@@ -38,6 +38,344 @@
 
     const getLineColor = (index) => palette[index % palette.length];
 
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS - START -
+    // ----------------------------------
+
+    // intercepts routing calls from map and extracts the updated waypoints without dependences from the S4C platform
+    const targetWindow = parent.window || window;
+    const nativeFetch = targetWindow.fetch;
+    const SNAP4CITY_ROUTING_URL = 'https://www.snap4city.org/whatif-router/route';
+    targetWindow.fetch = function(...args) {
+        let url = args[0];
+        // correct the URL on the map widget call
+        if (typeof url === 'string' && (url.startsWith('null?') || url.includes('/null?'))) {
+            url = url.replace(/.*null\?/, SNAP4CITY_ROUTING_URL + '?');
+            args[0] = url;
+            console.log('[INTERCEPTOR PROXY] URL di routing riparato ->', url);
+        }
+        // passive background extraction of the correct coordinates
+        setTimeout(() => {
+            if (typeof url === 'string' && url.includes('waypoints=')) {
+                try {
+                    const match = url.match(/waypoints=([^&]+)/);
+                    if (match && match[1]) {
+                        const rawPairs = decodeURIComponent(match[1]).split(';');
+                        rawPairs.forEach((pair, idx) => {
+                            const [lngStr, latStr] = pair.split(',');
+                            const lng = parseFloat(parseFloat(lngStr).toFixed(6));
+                            const lat = parseFloat(parseFloat(latStr).toFixed(6));
+                            if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
+                                editStops[idx].lat = lat;
+                                editStops[idx].lng = lng;
+                            }
+                        });
+                        console.log('[INTERCEPTOR] Coordinate sincronizzate correttamente');
+                    }
+                } catch (err) {
+                    console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
+                }
+            }
+        }, 0);
+        // return the native fetch intact with the correct URL to the map widget
+        return nativeFetch.apply(this, args);
+    };
+
+    // prevents a fatal 'ReferenceError' triggered by the S4C platform when the editor is loaded in a clone that lacks
+    // URL parameters. Ensures that map listeners do not interrupt the execution chain
+    try {
+        if (typeof parent.dashboardParams === 'undefined') {
+            parent.dashboardParams = {};
+        }
+    } catch (err) {
+        console.warn('Impossibile accedere allo scope del parent per dashboardParams', err);
+    }
+
+    // modular calculation of the progressive distances of the stops along the WKT route
+    const computeStopsDistances = (wktString, stopsArray) => {
+        if (!wktString || !stopsArray || stopsArray.length === 0 || typeof turf === 'undefined') return;
+        try {
+            const coordsString = wktString.replace('LINESTRING', '').replace('(', '').replace(')', '').trim();
+            const coordsArray = coordsString.split(',').map(pair => {
+                const [lng, lat] = pair.trim().split(' ').map(Number);
+                return [lng, lat];
+            });
+            const routeLineString = turf.lineString(coordsArray);
+            stopsArray.forEach((stop) => {
+                const stopPoint = turf.point([stop.lng, stop.lat]);
+                const snapped = turf.nearestPointOnLine(routeLineString, stopPoint);
+                stop.shape_dist_traveled = parseFloat((snapped.properties.location * 1000).toFixed(2));
+            });
+            console.log('[TOPOLOGY] Distanze calcolate per tutte le fermate.');
+        } catch (err) {
+            console.warn('[TOPOLOGY] Errore calcolo distanze:', err);
+        }
+    };
+
+    // benchmark const values
+    const DEFAULT_URBAN_SPEED_MPS = 4.44;       // 16km/h --> 4.4m/s
+    const DWELL_TIME_SECONDS = 15;              // standard dwell time at the bus stop
+    // physical constraints on the commercial speed of public transport
+    const SPEED_LIMIT_MIN_MPS = 0.83;           // ~3 km/h (minimum congestion threshold)
+    const SPEED_LIMIT_URBAN_MAX_MPS = 13.88;    // ~50 km/h (urban legal limit)
+    const SPEED_LIMIT_EXTRA_MAX_MPS = 22.22;    // ~80 km/h (extra-urban legal limit)
+    const SPEED_LIMIT_HIGHWAY_MAX_MPS = 27.78;  // ~100 km/h (highway legal limit)
+    // metric thresholds for spacing between stops (meters)
+    const REGIME_URBAN_DENSE_THRESHOLD = 300;
+    const REGIME_EXTRAURBAN_THRESHOLD = 1200;
+    const REGIME_HIGHWAY_THRESHOLD = 4000;
+
+    // converts a time string into an integer number of seconds
+    const timeStringToSeconds = (timeStr) => {
+        if (!timeStr) return null;
+        const parts = timeStr.split(':').map(Number);
+        if (parts.length === 2) return parts[0] * 3600 + parts[1] * 60;
+        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        return null;
+    };
+    // converts an integer number of seconds into a time string
+    const secondsToTimeString = (totalSecs) => {
+        if (totalSecs === null || isNaN(totalSecs)) return null;
+        const hours = Math.floor(totalSecs / 3600);
+        const minutes = Math.floor((totalSecs % 3600) / 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    };
+
+    // local cache to avoid flooding Overpass API
+    let osmRouteCache = {
+        routeUri: null,
+        busLaneMeters: 0,
+        roadWeights: []
+    };
+
+    // calculates the geographic bounding box for a set of stops
+    const computeBoundingBox = (stops) => {
+        let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+        stops.forEach(s => {
+            if (s.lat < minLat) minLat = s.lat;
+            if (s.lat > maxLat) maxLat = s.lat;
+            if (s.lng < minLng) minLng = s.lng;
+            if (s.lng > maxLng) maxLng = s.lng;
+        });
+        // margin of tolerance (~200m)
+        return `${minLat - 0.002},${minLng - 0.002},${maxLat + 0.002},${maxLng + 0.002}`;
+    };
+
+    // queries the OpenStreetMap Overpass API to detect priority lanes
+    const fetchOsmTransitData = async (stops, routeUri) => {
+        if (osmRouteCache.routeUri === routeUri) return osmRouteCache;
+        const bbox = computeBoundingBox(stops);
+        // look for roads with dedicated bus lanes within the area covered by the route
+        const overpassQuery = `[out:json][timeout:10];(way["lanes:bus"](${bbox});way["highway"="busway"](${bbox}););out geom;`;
+        const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+        let totalBusLaneMeters = 0;
+        try {
+            const response = await fetch(overpassUrl);
+            const data = await response.json();
+            if (data && data.elements && data.elements.length > 0) {
+                data.elements.forEach(element => {
+                    if (element.geometry && element.geometry.length > 1) {
+                        // converts the OSM coordinates in GeoJSON format for Turf.js to get the bus lanes length
+                        const coords = element.geometry.map(pt => [pt.lon, pt.lat]);
+                        const line = turf.lineString(coords);
+                        totalBusLaneMeters += turf.length(line, { units: 'meters' });
+                    }
+                });
+            }
+            console.log(`[OSM] Corsie bus rilevate: ${totalBusLaneMeters > 0 ? Math.round(totalBusLaneMeters) + ' metri' : 'Nessuna'}`);
+            osmRouteCache = {
+                routeUri: routeUri,
+                busLaneMeters: totalBusLaneMeters
+            };
+        } catch (err) {
+            console.warn('[OSM] Overpass API non raggiungibile o rate-limited. Fallback attivo:', err);
+            osmRouteCache = { routeUri: routeUri, busLaneMeters: 0 };
+        }
+        return osmRouteCache;
+    };
+
+    // calculate the speed weight for a segment between stop k-1 and stop k
+    const getSegmentSpeedWeight = (prevStop, currStop, busLaneMeters) => {
+        let weight = 1.0; // baseline (urban standard)
+        // heuristic weighting based on node spacing: if stops are very close together, we are in an area that entails slower movement speeds
+        const segmentDist = Math.max(0, (currStop.shape_dist_traveled || 0) - (prevStop.shape_dist_traveled || 0));
+        if (busLaneMeters > 0 && segmentDist > 0) { // dedicated bus lanes bonus, weighted by the impact of the lane on the segment (+25% * [0;1])
+            const coverageRatio = Math.min(1.0, busLaneMeters / segmentDist);
+            weight += (0.25 * coverageRatio);
+        }
+        if (segmentDist > 0 && segmentDist < REGIME_URBAN_DENSE_THRESHOLD) {
+            weight *= 0.80; // urban dense
+        } else if (segmentDist >= REGIME_HIGHWAY_THRESHOLD) {
+            weight *= 4.50; // highway
+        } else if (segmentDist >= REGIME_EXTRAURBAN_THRESHOLD) {
+            weight *= 2.50; // extra-urban
+        } else if (segmentDist > 700) {
+            weight *= 1.15; // urban NOT dense
+        }
+        return weight;
+    };
+
+    // calculate the effective speed of a segment by applying OSM weights and regulatory clamping.
+    const calculateEffectiveSpeed = (stopA, stopB, busLaneMeters, segmentMeters) => {
+        // heterogeneous segment weighting (OSM-based)
+        const weight = getSegmentSpeedWeight(stopA, stopB, busLaneMeters);
+        let effectiveSpeed = DEFAULT_URBAN_SPEED_MPS * weight;
+        // dynamic speed ceiling selection
+        let currentSpeedCeiling = SPEED_LIMIT_URBAN_MAX_MPS;
+        if (segmentMeters >= REGIME_HIGHWAY_THRESHOLD) {
+            currentSpeedCeiling = SPEED_LIMIT_HIGHWAY_MAX_MPS;
+        } else if (segmentMeters >= REGIME_EXTRAURBAN_THRESHOLD) {
+            currentSpeedCeiling = SPEED_LIMIT_EXTRA_MAX_MPS;
+        }
+        // plausibility filter (dynamic clamping): prevents speed dropping below walking pace or exceeding regime legal limits
+        if (effectiveSpeed < SPEED_LIMIT_MIN_MPS) effectiveSpeed = SPEED_LIMIT_MIN_MPS;
+        if (effectiveSpeed > currentSpeedCeiling) effectiveSpeed = currentSpeedCeiling;
+        return { effectiveSpeed, weight };
+    };
+
+    // interpolates proportionally the time stamps in a trip using the cumulative distances calculated using Turf.js
+    const interpolateTimetable = (stops, currentTimes, startIndex = 0, osmData = null) => {
+        if (!stops || stops.length === 0) return;
+        const busLaneMeters = osmData ? (osmData.busLaneMeters || 0) : 0;
+        const isValidTime = (t) => t !== null && t !== undefined && t !== '-' && t !== '';
+        // set departure default fallback if not a single stop has an assigned time (null guard)
+        const hasAnyValidTime = currentTimes.some(isValidTime);
+        if (!hasAnyValidTime) {
+            console.warn('[TIMETABLE GUARD] Nessun orario valido presente nella tratta. Inizializzo Capolinea alle 08:00');
+            currentTimes[0] = "08:00"; // deterministic default fallback
+        }
+        // retro propagation to resolve leading nulls (head gaps)
+        if (startIndex === 0) {
+            const firstKnownIdx = currentTimes.findIndex(isValidTime);
+            if (firstKnownIdx > 0) {
+                console.log(`[TIMETABLE HEAD] Risoluzione buchi iniziali da fermata 1 a ${firstKnownIdx}...`);
+                for (let k = firstKnownIdx - 1; k >= 0; k--) {
+                    const prevDist = stops[k].shape_dist_traveled || 0;
+                    const nextDist = stops[k + 1].shape_dist_traveled || prevDist;
+                    const segmentMeters = Math.max(0, nextDist - prevDist);
+                    const { effectiveSpeed } = calculateEffectiveSpeed(stops[k], stops[k + 1], busLaneMeters, segmentMeters);
+                    const runningSecs = Math.round(segmentMeters / effectiveSpeed);
+                    const nextSecs = timeStringToSeconds(currentTimes[k + 1]);
+                    const currSecs = Math.max(0, nextSecs - runningSecs - DWELL_TIME_SECONDS);
+                    currentTimes[k] = secondsToTimeString(currSecs);
+                    console.log(`[TIMETABLE RETRO] Fermata ${k + 1} (${segmentMeters}m): ${currentTimes[k]}`);
+                }
+            }
+        }
+        // two-pointer scanner to cover arbitrary patterns (internal & tail gaps)
+        if (startIndex === 0) {
+            let i = 0;
+            while (i < stops.length - 1) {
+                if (isValidTime(currentTimes[i + 1])) {
+                    i++;
+                    continue;
+                }
+                let nextKnownIdx = -1;
+                for (let j = i + 1; j < stops.length; j++) {
+                    if (isValidTime(currentTimes[j])) {
+                        nextKnownIdx = j;
+                        break;
+                    }
+                }
+                if (nextKnownIdx !== -1) { // closed window case
+                    const sA = stops[i].shape_dist_traveled || 0;
+                    const sB = stops[nextKnownIdx].shape_dist_traveled || sA;
+                    const tA = timeStringToSeconds(currentTimes[i]);
+                    const tB = timeStringToSeconds(currentTimes[nextKnownIdx]);
+                    const deltaDist = Math.max(0, sB - sA);
+                    const deltaTime = Math.max(0, tB - tA);
+                    for (let k = i + 1; k < nextKnownIdx; k++) {
+                        const sK = stops[k].shape_dist_traveled || sA;
+                        const ratio = deltaDist > 0 ? (sK - sA) / deltaDist : 0;
+                        const tK = Math.round(tA + ratio * deltaTime);
+                        currentTimes[k] = secondsToTimeString(tK);
+                        console.log(`[TIMETABLE INTERPOLATED] Fermata ${k + 1} (chiusa tra ${i + 1} e ${nextKnownIdx + 1}): ${currentTimes[k]}`);
+                    }
+                    i = nextKnownIdx;
+                } else { // open window case
+                    for (let k = i + 1; k < stops.length; k++) {
+                        const prevDist = stops[k - 1].shape_dist_traveled || 0;
+                        const currDist = stops[k].shape_dist_traveled || prevDist;
+                        const segmentMeters = Math.max(0, currDist - prevDist);
+                        const prevSecs = timeStringToSeconds(currentTimes[k - 1]);
+                        const { effectiveSpeed, weight } = calculateEffectiveSpeed(stops[k - 1], stops[k], busLaneMeters, segmentMeters);
+                        const runningSecs = Math.round(segmentMeters / effectiveSpeed);
+                        const currSecs = prevSecs + runningSecs + DWELL_TIME_SECONDS;
+                        currentTimes[k] = secondsToTimeString(currSecs);
+                        console.log(`[TIMETABLE TAIL] Fermata ${k + 1} (${segmentMeters}m): ${currentTimes[k]}`);
+                    }
+                    break;
+                }
+            }
+        } else { // cascade interpolation for modified stops
+            for (let k = startIndex; k < stops.length; k++) {
+                const prevDist = stops[k - 1].shape_dist_traveled || 0;
+                const currDist = stops[k].shape_dist_traveled || prevDist;
+                const segmentMeters = Math.max(0, currDist - prevDist);
+                const prevSecs = timeStringToSeconds(currentTimes[k - 1]);
+                if (prevSecs === null) continue;
+                const { effectiveSpeed, weight } = calculateEffectiveSpeed(stops[k - 1], stops[k], busLaneMeters, segmentMeters);
+                const runningSecs = Math.round(segmentMeters / effectiveSpeed);
+                const currSecs = prevSecs + runningSecs + DWELL_TIME_SECONDS;
+                currentTimes[k] = secondsToTimeString(currSecs);
+                console.log(`[TIMETABLE CASCADE] Fermata ${k + 1} (${segmentMeters}m): ${currentTimes[k]}`);
+            }
+        }
+    };
+
+    // save & export GTFS-normalized json document
+    const buildExportJson = () => {
+        // generate unique id by using timestamp
+        const timestamp = new Date().getTime();
+        const clonedTripId = `${editRouteUri}_TRIP_${timestamp}`;
+        const clonedShapeId = `${editRouteUri}_SHAPE_${timestamp}`;
+        // map new stops and stops_times
+        const gtfsStopTimes = editStops.map((s, i) => {
+            const nameEl = container.querySelector(`#editStopName-${i}`);
+            const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
+            const sequence = i+1;
+            const id = s.serviceUri ? s.serviceUri : "TEMP_STOP_"+sequence;
+            const scheduledTime = stopCurrentTimes[i] || null;
+            return {
+                stop_sequence: sequence,
+                stop_id: id,
+                stop_name: currentName,
+                stop_lat: s.lat,
+                stop_lon: s.lng,
+                arrival_time: scheduledTime,
+                departure_time: scheduledTime,
+                shape_dist_traveled: s.shape_dist_traveled !== undefined ? s.shape_dist_traveled : null
+            };
+        });
+
+        // payload assembly
+        return {
+            entityType: "PublicTransportRoutePatch",
+            metadata: {
+                modifiedAt: new Date().toISOString(),
+                requiresCopyOnWrite: true,
+                exportedBy: "GTFS_Editor_Tesi"
+            },
+            route: {
+                route_id: editRouteUri,
+                route_short_name: editLineName,
+                route_color: editRouteColor
+            },
+            trip: {
+                trip_id: clonedTripId
+            },
+            shape: {
+                shape_id: clonedShapeId,
+                wkt_geometry: editCurrentWkt || null
+            },
+            stop_times: gtfsStopTimes
+        };
+    };
+
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS -  END  -
+    // ----------------------------------
+
     // Abort any in-flight nav fetch, create a fresh controller and return its signal
     const startNav = () => {
         if (navAbortController) navAbortController.abort();
@@ -1288,125 +1626,6 @@
     // - CUSTOM MODULES: THESIS - START -
     // ----------------------------------
 
-    // save & export GTFS-normalized json document
-    const buildExportJson = () => {
-        // generate unique id by using timestamp
-        const timestamp = new Date().getTime();
-        const clonedTripId = `${editRouteUri}_TRIP_${timestamp}`;
-        const clonedShapeId = `${editRouteUri}_SHAPE_${timestamp}`;
-        // map new stops and stops_times
-        const gtfsStopTimes = editStops.map((s, i) => {
-            const nameEl = container.querySelector(`#editStopName-${i}`);
-            const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
-            const sequence = i+1;
-            const id = s.serviceUri ? s.serviceUri : "TEMP_STOP_"+sequence;
-            const scheduledTime = stopCurrentTimes[i];
-            return {
-                stop_sequence: sequence,
-                stop_id: id,
-                stop_name: currentName,
-                stop_lat: s.lat,
-                stop_lon: s.lng,
-                arrival_time: scheduledTime,
-                departure_time: scheduledTime,
-                shape_dist_traveled: s.shape_dist_traveled !== undefined ? s.shape_dist_traveled : null
-            };
-        });
-
-        // payload assembly
-        return {
-            entityType: "PublicTransportRoutePatch",
-            metadata: {
-                modifiedAt: new Date().toISOString(),
-                requiresCopyOnWrite: true,
-                exportedBy: "GTFS_Editor_Tesi"
-            },
-            route: {
-                route_id: editRouteUri,
-                route_short_name: editLineName,
-                route_color: editRouteColor
-            },
-            trip: {
-                trip_id: clonedTripId
-            },
-            shape: {
-                shape_id: clonedShapeId,
-                wkt_geometry: editCurrentWkt || null
-            },
-            stop_times: gtfsStopTimes
-        };
-    };
-
-    // intercepts routing calls from map and extracts the updated waypoints without dependences from the S4C platform
-    const targetWindow = parent.window || window;
-    const nativeFetch = targetWindow.fetch;
-    const SNAP4CITY_ROUTING_URL = 'https://www.snap4city.org/whatif-router/route';
-    targetWindow.fetch = function(...args) {
-        let url = args[0];
-        // correct the URL on the map widget call
-        if (typeof url === 'string' && (url.startsWith('null?') || url.includes('/null?'))) {
-            url = url.replace(/.*null\?/, SNAP4CITY_ROUTING_URL + '?');
-            args[0] = url;
-            console.log('[INTERCEPTOR PROXY] URL di routing riparato ->', url);
-        }
-        // passive background extraction of the correct coordinates
-        setTimeout(() => {
-            if (typeof url === 'string' && url.includes('waypoints=')) {
-                try {
-                    const match = url.match(/waypoints=([^&]+)/);
-                    if (match && match[1]) {
-                        const rawPairs = decodeURIComponent(match[1]).split(';');
-                        rawPairs.forEach((pair, idx) => {
-                            const [lngStr, latStr] = pair.split(',');
-                            const lng = parseFloat(parseFloat(lngStr).toFixed(6));
-                            const lat = parseFloat(parseFloat(latStr).toFixed(6));
-                            if (!isNaN(lat) && !isNaN(lng) && editStops[idx]) {
-                                editStops[idx].lat = lat;
-                                editStops[idx].lng = lng;
-                            }
-                        });
-                        console.log('[INTERCEPTOR] Coordinate sincronizzate correttamente');
-                    }
-                } catch (err) {
-                    console.warn('[INTERCEPTOR] Errore nel parsing dei waypoints:', err);
-                }
-            }
-        }, 0);
-        // return the native fetch intact with the correct URL to the map widget
-        return nativeFetch.apply(this, args);
-    };
-
-    // prevents a fatal 'ReferenceError' triggered by the S4C platform when the editor is loaded in a clone that lacks
-    // URL parameters. Ensures that map listeners do not interrupt the execution chain
-    try {
-        if (typeof parent.dashboardParams === 'undefined') {
-            parent.dashboardParams = {};
-        }
-    } catch (err) {
-        console.warn('Impossibile accedere allo scope del parent per dashboardParams', err);
-    }
-
-    // modular calculation of the progressive distances of the stops along the WKT route
-    const computeStopsDistances = (wktString, stopsArray) => {
-        if (!wktString || !stopsArray || stopsArray.length === 0 || typeof turf === 'undefined') return;
-        try {
-            const coordsString = wktString.replace('LINESTRING', '').replace('(', '').replace(')', '').trim();
-            const coordsArray = coordsString.split(',').map(pair => {
-                const [lng, lat] = pair.trim().split(' ').map(Number);
-                return [lng, lat];
-            });
-            const routeLineString = turf.lineString(coordsArray);
-            stopsArray.forEach((stop) => {
-                const stopPoint = turf.point([stop.lng, stop.lat]);
-                const snapped = turf.nearestPointOnLine(routeLineString, stopPoint);
-                stop.shape_dist_traveled = parseFloat((snapped.properties.location * 1000).toFixed(2));
-            });
-            console.log('[TOPOLOGY] Distanze calcolate per tutte le fermate.');
-        } catch (err) {
-            console.warn('[TOPOLOGY] Errore calcolo distanze:', err);
-        }
-    };
-
     parent.document.addEventListener('trattaRouteUpdated', (e) => {
         if (!editMode) return;
         showEditError(null);
@@ -1435,154 +1654,6 @@
             drawRoutePath(editRouteUri, e.detail.wkt, editRouteColor);
         }, 150);
     });
-
-    // benchmark const values
-    const DEFAULT_URBAN_SPEED_MPS = 4.44;       // 16km/h --> 4.4m/s
-    const DWELL_TIME_SECONDS = 15;              // standard dwell time at the bus stop
-    // physical constraints on the commercial speed of public transport
-    const SPEED_LIMIT_MIN_MPS = 0.83;           // ~3 km/h (minimum congestion threshold)
-    const SPEED_LIMIT_URBAN_MAX_MPS = 13.88;    // ~50 km/h (urban legal limit)
-    const SPEED_LIMIT_EXTRA_MAX_MPS = 22.22;    // ~80 km/h (extra-urban legal limit)
-    const SPEED_LIMIT_HIGHWAY_MAX_MPS = 27.78;  // ~100 km/h (highway legal limit)
-    // metric thresholds for spacing between stops (meters)
-    const REGIME_URBAN_DENSE_THRESHOLD = 300;
-    const REGIME_EXTRAURBAN_THRESHOLD = 1200;
-    const REGIME_HIGHWAY_THRESHOLD = 4000;
-
-    // converts a time string into an integer number of seconds
-    const timeStringToSeconds = (timeStr) => {
-        if (!timeStr) return null;
-        const parts = timeStr.split(':').map(Number);
-        if (parts.length === 2) return parts[0] * 3600 + parts[1] * 60;
-        if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-        return null;
-    };
-    // converts an integer number of seconds into a time string
-    const secondsToTimeString = (totalSecs) => {
-        if (totalSecs === null || isNaN(totalSecs)) return null;
-        const hours = Math.floor(totalSecs / 3600);
-        const minutes = Math.floor((totalSecs % 3600) / 60);
-        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-    };
-
-    // local chache to avoid flooding Overpass API
-    let osmRouteCache = {
-        routeUri: null,
-        hasBusLane: false,
-        roadWeights: []
-    };
-
-    // calculates the geographic bounding box for a set of stops
-    const computeBoundingBox = (stops) => {
-        let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-        stops.forEach(s => {
-            if (s.lat < minLat) minLat = s.lat;
-            if (s.lat > maxLat) maxLat = s.lat;
-            if (s.lng < minLng) minLng = s.lng;
-            if (s.lng > maxLng) maxLng = s.lng;
-        });
-        // margin of tolerance (~200m)
-        return `${minLat - 0.002},${minLng - 0.002},${maxLat + 0.002},${maxLng + 0.002}`;
-    };
-
-    // queries the OpenStreetMap Overpass API to detect priority lanes
-    const fetchOsmTransitData = async (stops, routeUri) => {
-        if (osmRouteCache.routeUri === routeUri) return osmRouteCache;
-        const bbox = computeBoundingBox(stops);
-        // look for roads with dedicated bus lanes within the area covered by the route
-        const overpassQuery = `[out:json][timeout:10];(way["lanes:bus"](${bbox});way["highway"="busway"](${bbox}););out geom;`;
-        const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
-        let totalBusLaneMeters = 0;
-        try {
-            const response = await fetch(overpassUrl);
-            const data = await response.json();
-            if (data && data.elements && data.elements.length > 0) {
-                data.elements.forEach(element => {
-                    if (element.geometry && element.geometry.length > 1) {
-                        // converts the OSM coordinates in GeoJSON format for Turf.js to get the bus lanes length
-                        const coords = element.geometry.map(pt => [pt.lon, pt.lat]);
-                        const line = turf.lineString(coords);
-                        totalBusLaneMeters += turf.length(line, { units: 'meters' });
-                    }
-                });
-            }
-            console.log(`[OSM] Corsie bus rilevate: ${totalBusLaneMeters > 0 ? Math.round(totalBusLaneMeters) + ' metri' : 'Nessuna'}`);
-            osmRouteCache = {
-                routeUri: routeUri,
-                busLaneMeters: totalBusLaneMeters
-            };
-        } catch (err) {
-            console.warn('[OSM] Overpass API non raggiungibile o rate-limited. Fallback attivo:', err);
-            osmRouteCache = { routeUri: routeUri, busLaneMeters: 0 };
-        }
-        return osmRouteCache;
-    };
-
-    // calculate the speed weight for a segment between stop k-1 and stop k
-    const getSegmentSpeedWeight = (prevStop, currStop, busLaneMeters) => {
-        let weight = 1.0; // baseline (urban standard)
-        if (busLaneMeters > 0 && segmentDist > 0) { // dedicated bus lanes bonus, weighted by the impact of the lane on the segment (+25% * [0;1])
-            const coverageRatio = Math.min(1.0, busLaneMeters / segmentDist);
-            weight += (0.25 * coverageRatio);
-        }
-        // heuristic weighting based on node spacing: if stops are very close together, we are in an area that entails slower movement speeds
-        const segmentDist = Math.max(0, (currStop.shape_dist_traveled || 0) - (prevStop.shape_dist_traveled || 0));
-        if (segmentDist > 0 && segmentDist < REGIME_URBAN_DENSE_THRESHOLD) {
-            weight *= 0.80; // urban dense
-        }  else if (segmentDist > 700) {
-            weight *= 1.15; // urban NOT dense
-        } else if (segmentDist >= REGIME_EXTRAURBAN_THRESHOLD) {
-            weight *= 2.50; // extra-urban
-        } else if (segmentDist >= REGIME_HIGHWAY_THRESHOLD) {
-            weight *= 4.50; // highway
-        }
-        return weight;
-    };
-
-    // interpolates proportionally the time stamps in a trip using the cumulative distances calculated using Turf.js
-    const interpolateTimetable = (stops, currentTimes, startIndex = 0, osmData = null) => {
-        if (!stops || stops.length === 0) return;
-        // ensure that the first stop has a valid departure time
-        if (!currentTimes[0]) {
-            currentTimes[0] = "08:00"; // deterministic default fallback
-        }
-        // checks if startIndex>0, if so, it means the bus stop was moved; if not, we are interpolating the missing time gaps at start
-        const start = Math.max(1, startIndex);
-        const hasBusLane = osmData ? osmData.hasBusLane : false;
-        for (let k = start; k < stops.length; k++) {
-            // if startIndex===0 and the time already exists, do not overwrite the key points
-            if (startIndex === 0 && currentTimes[k] && currentTimes[k] !== '-') {
-                continue;
-            }
-            const prevDist = stops[k - 1].shape_dist_traveled || 0;
-            const currDist = stops[k].shape_dist_traveled || prevDist;
-            const segmentMeters = Math.max(0, currDist - prevDist);
-            const prevSecs = timeStringToSeconds(currentTimes[k - 1]);
-            if (prevSecs === null) continue;
-            // heteregeneous segment weighting (OSM-based)
-            const weight = getSegmentSpeedWeight(stops[k - 1], stops[k], hasBusLane);
-            let effectiveSpeed = DEFAULT_URBAN_SPEED_MPS * weight;
-            // dynamic speed ceiling selection
-            let currentSpeedCeiling = SPEED_LIMIT_URBAN_MAX_MPS;
-            let regimeLabel = 'URBAN';
-            if (segmentMeters >= REGIME_EXTRAURBAN_THRESHOLD) {
-                currentSpeedCeiling = SPEED_LIMIT_EXTRA_MAX_MPS;
-                regimeLabel = 'EXTRA';
-            }
-            else if (segmentMeters >= REGIME_HIGHWAY_THRESHOLD) {
-                currentSpeedCeiling = SPEED_LIMIT_HIGHWAY_MAX_MPS;
-                regimeLabel = 'HIGHWAY';
-            }
-            // plausibility filter (dynamic clamping): prevents speed dropping below walking pace or exceeding regime legal limits
-            if (effectiveSpeed < SPEED_LIMIT_MIN_MPS) effectiveSpeed = SPEED_LIMIT_MIN_MPS;
-            if (effectiveSpeed > currentSpeedCeiling) effectiveSpeed = currentSpeedCeiling;
-            // calculating travel time using checked data
-            const runningSecs = Math.round(segmentMeters / effectiveSpeed);
-            const currSecs = prevSecs + runningSecs + DWELL_TIME_SECONDS;
-            currentTimes[k] = secondsToTimeString(currSecs);
-            console.log(`[TIMETABLE ${regimeLabel}] Fermata ${k + 1} (${segmentMeters}m) calcolata a: ${currentTimes[k]} (v: ${(effectiveSpeed * 3.6).toFixed(1)} km/h, w: ${weight.toFixed(2)})`);
-        }
-    };
 
     // ----------------------------------
     // - CUSTOM MODULES: THESIS -  END  -
