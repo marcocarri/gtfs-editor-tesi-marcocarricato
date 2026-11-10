@@ -33,6 +33,39 @@
     const categories = 'BusStop;Train_station;Tram_stops;Ferry_stop';
     const apiBase = 'https://www.disit.org/superservicemap/api/v1/';
 
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS - START -
+    // ----------------------------------
+
+    // automatically inspects S4C dashboard to find the unique ID of the map widget
+    const detectMapWidgetId = () => {
+        // default fallback ID, manually updated for every new dashboard
+        const fallbackId = 'w_Map_5280_widgetMap47691';
+        try {
+            const mapEl = parent.document.querySelector('[id^="w_Map_"][id*="_widgetMap"]') ||
+                parent.document.querySelector('[id*="_widgetMap"]');
+            if (mapEl && mapEl.id) {
+                console.log('[AUTO-DISCOVERY] Rilevato ID Mappa dal DOM parent:', mapEl.id);
+                return mapEl.id;
+            }
+            if (parent.map && parent.map.mapName) {
+                console.log('[AUTO-DISCOVERY] Rilevato ID Mappa da parent.map:', parent.map.mapName);
+                return parent.map.mapName;
+            }
+        } catch (err) {
+            console.warn('[AUTO-DISCOVERY] Errore durante la scansione del DOM parent, uso fallback:', err);
+        }
+        console.warn('[AUTO-DISCOVERY] Mappa non rilevata dinamicamente. Utilizzo ID fallback:', fallbackId);
+        return fallbackId;
+    };
+
+    // global destination constant for all jQuery calls to the Event Bus
+    const MAP_WIDGET_TARGET = detectMapWidgetId();
+
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS -  END  -
+    // ----------------------------------
+
     // --- FUNCTION DEFINITIONS ---
 
     const tc = (v) => Math.trunc(v * 1e5) / 1e5; // truncate to 5 decimal places
@@ -425,7 +458,7 @@ const resetApp = () => {
         for (const u of staleUris) {
             parent.$('body').trigger({
                 type: 'removeSelectorPin',
-                target: 'w_Map_5280_widgetMap47691',
+                target: MAP_WIDGET_TARGET,
                 passedData: {
                     query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                     desc: u,
@@ -441,7 +474,7 @@ const resetApp = () => {
     if (oldCoordinates && oldCoordinates.length > 0) {
         parent.$('body').trigger({
             type: 'removeGeoInfoPin',
-            target: 'w_Map_5280_widgetMap47691',
+            target: MAP_WIDGET_TARGET,
             passedData: [{ eventType: 'GeoInfoPin', id: 'mapPoint', lat: oldCoordinates[1], lng: oldCoordinates[0], textHtml: '' }]
         });
         oldCoordinates = [];
@@ -509,7 +542,7 @@ const removeTrattaPaths = () => {
         const uri = currentlyShowedPathsUri[i];
         parent.$('body').trigger({
             type: 'removeBusRoute',
-            target: 'w_Map_5280_widgetMap47691',
+            target: MAP_WIDGET_TARGET,
             passedData: { desc: uri }
         });
         currentlyShowedPathsUri.splice(i, 1);
@@ -520,7 +553,7 @@ const drawRoutePath = (routeUri, wktGeometry, color) => {
     if (!wktGeometry) return;
     parent.$('body').trigger({
         type: 'drawBusRoute',
-        target: 'w_Map_5280_widgetMap47691',
+        target: MAP_WIDGET_TARGET,
         passedData: { desc: routeUri, wktGeometry, color }
     });
     currentlyShowedPathsUri.push(routeUri);
@@ -651,7 +684,7 @@ const enterEditMode = async () => {
 
     parent.$('body').trigger({
         type: 'startEditTratta',
-        target: 'w_Map_5280_widgetMap47691',
+        target: MAP_WIDGET_TARGET,
         passedData: { stops: stops.map(s => ({ lat: s.lat, lng: s.lng })), color: editRouteColor }
     });
 
@@ -736,7 +769,7 @@ const exitEditMode = () => {
     pendingTimeUpdateCallback = null;
     container.querySelector('#timeUpdateModal').style.display = 'none';
 
-    parent.$('body').trigger({ type: 'stopEditTratta', target: 'w_Map_5280_widgetMap47691', passedData: {} });
+    parent.$('body').trigger({ type: 'stopEditTratta', target: MAP_WIDGET_TARGET, passedData: {} });
 
     container.querySelector('#radiusRow').style.display = 'flex';
     container.querySelector('#tabs').style.display = 'flex';
@@ -940,7 +973,7 @@ const addRouteStopPins = async (routes, epoch, signal) => {
                     for (const u of uris) {
                         parent.$('body').trigger({
                             type: 'removeSelectorPin',
-                            target: 'w_Map_5280_widgetMap47691',
+                            target: MAP_WIDGET_TARGET,
                             passedData: {
                                 query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                                 desc: u,
@@ -989,7 +1022,7 @@ const addRouteStopPins = async (routes, epoch, signal) => {
                     currentlyShowedPinsUri.push(s.uri);
                     parent.$('body').trigger({
                         type: 'addSelectorPin',
-                        target: 'w_Map_5280_widgetMap47691',
+                        target: MAP_WIDGET_TARGET,
                         passedData: {
                             query: `${apiBase}?serviceUri=${encodeURIComponent(s.uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                             targets: '',
@@ -1183,7 +1216,7 @@ const removeBusStopPins = (clickedUri = '') => {
         if (clickedUri === '' || uri !== clickedUri) {
             parent.$('body').trigger({
                 type: 'removeSelectorPin',
-                target: 'w_Map_5280_widgetMap47691',
+                target: MAP_WIDGET_TARGET,
                 passedData: {
                     query: `${apiBase}?serviceUri=${encodeURIComponent(uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                     desc: uri,
@@ -1287,7 +1320,7 @@ const addBusStopPins = (result) => {
         currentlyShowedPinsUri.push(uri);
         parent.$('body').trigger({
             type: 'addSelectorPin',
-            target: 'w_Map_5280_widgetMap47691',
+            target: MAP_WIDGET_TARGET,
             passedData: {
                 query: `${apiBase}?serviceUri=${encodeURIComponent(uri)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                 targets: '',
@@ -1336,7 +1369,7 @@ const clickOnBusStopOnGui = async (uri) => {
     if (oldCoordinates && oldCoordinates.length > 0) {
         parent.$('body').trigger({
             type: 'removeGeoInfoPin',
-            target: 'w_Map_5280_widgetMap47691',
+            target: MAP_WIDGET_TARGET,
             passedData: [{ eventType: 'GeoInfoPin', id: 'mapPoint', lat: oldCoordinates[1], lng: oldCoordinates[0], textHtml: '' }]
         });
         oldCoordinates = [];
@@ -1349,7 +1382,7 @@ const clickOnBusStopOnGui = async (uri) => {
         for (const u of staleUris) {
             parent.$('body').trigger({
                 type: 'removeSelectorPin',
-                target: 'w_Map_5280_widgetMap47691',
+                target: MAP_WIDGET_TARGET,
                 passedData: {
                     query: `${apiBase}?serviceUri=${encodeURIComponent(u)}&requestFrom=user&format=json&uid=${pinUid}&lang=it`,
                     desc: u,
@@ -1379,12 +1412,12 @@ const addLocationPin = (coords) => {
     if (oldCoordinates && oldCoordinates.length > 0) {
         parent.$('body').trigger({
             type: 'removeGeoInfoPin',
-            target: 'w_Map_5280_widgetMap47691',
+            target: MAP_WIDGET_TARGET,
             passedData: [{ "eventType": "GeoInfoPin", "id": "mapPoint", "lat": oldCoordinates[1], "lng": oldCoordinates[0], "textHtml": "" }]
         });
     }
     oldCoordinates = coords;
-    parent.$('body').trigger({ type: 'addGeoInfoPin', target: 'w_Map_5280_widgetMap47691', passedData: pin });
+    parent.$('body').trigger({ type: 'addGeoInfoPin', target: MAP_WIDGET_TARGET, passedData: pin });
 };
 
 // --- INITIALIZATION ---
