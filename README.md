@@ -1,4 +1,3 @@
-```markdown
 # GTFS Editor - Snap4City Integration
 **Tesi di Laurea Triennale in Ingegneria Informatica**
 
