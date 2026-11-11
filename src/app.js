@@ -1550,6 +1550,30 @@
         modal.style.display = 'flex';
     };
 
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS - START -
+    // ----------------------------------
+    const handleDirectExport = () => {
+        const standardData = buildStandardizedPayload();
+        const jsonText = JSON.stringify(standardData, null, 2);
+        const blob = new Blob([jsonText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const fileName = `gtfs_relazionale_${editLineName || 'export'}_${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log(`[EXPORT] Download diretto completato -> file: ${fileName}`);
+    };
+
+    container.querySelector('#btnDirectExport').addEventListener('click', handleDirectExport);
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS -  END  -
+    // ----------------------------------
+
     container.querySelector('#btnSaveEdit').addEventListener('click', openSaveModal);
     container.querySelector('#btnEsciModifica').addEventListener('click', exitEditMode);
 
