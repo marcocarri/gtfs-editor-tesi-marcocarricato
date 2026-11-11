@@ -41,7 +41,7 @@
     // automatically inspects S4C dashboard to find the unique ID of the map widget
     const detectMapWidgetId = () => {
         // default fallback ID, manually updated for every new dashboard
-        const fallbackId = 'w_Map_5280_widgetMap47691';
+        const fallbackId = 'w_Map_5296_widgetMap47844';
         try {
             const mapEl = parent.document.querySelector('[id^="w_Map_"][id*="_widgetMap"]') ||
                 parent.document.querySelector('[id*="_widgetMap"]');
