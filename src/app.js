@@ -363,7 +363,7 @@
         }
     };
 
-    // save & export GTFS-normalized json document
+    // save & export GTFS-not-normalized json document
     const buildExportJson = () => {
         // generate unique id by using timestamp
         const timestamp = new Date().getTime();
@@ -410,6 +410,59 @@
             },
             stop_times: gtfsStopTimes
         };
+    };
+
+    // save & export GTFS-normalized json document
+    const buildStandardizedPayload = () => {
+        const timestamp = new Date().getTime();
+        const tripId = `${editRouteUri}_TRIP_${timestamp}`;
+        const shapeId = `${editRouteUri}_SHAPE_${timestamp}`;
+        const routeId = editRouteUri;
+        const cleanColor = editRouteColor ? editRouteColor.replace('#', '').toUpperCase() : '007BFF';
+        const payload = {
+            agency: allAgencies,
+            routes: [{
+                route_id: routeId,
+                route_short_name: editLineName,
+                route_type: 3, // 3 - bus type in GTFS
+                route_color: cleanColor
+            }],
+            trips: [{
+                route_id: routeId,
+                trip_id: tripId,
+                shape_id: shapeId,
+                direction_id: 0
+            }],
+            stops: editStops.map((s, i) => {
+                const nameEl = container.querySelector(`#editStopName-${i}`);
+                const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
+                return {
+                    stop_id: s.serviceUri || `TEMP_STOP_${i + 1}`,
+                    stop_name: currentName,
+                    stop_lat: s.lat,
+                    stop_lon: s.lng
+                };
+            }),
+            stop_times: editStops.map((s, i) => {
+                // standard time formatting
+                const rawTime = stopCurrentTimes[i];
+                const formattedTime = rawTime ? (rawTime.length === 5 ? `${rawTime}:00` : rawTime) : null;
+                return {
+                    trip_id: tripId,
+                    stop_sequence: i + 1,
+                    stop_id: s.serviceUri || `TEMP_STOP_${i + 1}`,
+                    arrival_time: formattedTime,
+                    departure_time: formattedTime,
+                    shape_dist_traveled: s.shape_dist_traveled !== undefined ? s.shape_dist_traveled : null
+                };
+            }),
+            shapes: [{
+                shape_id: shapeId,
+                wkt_geometry: editCurrentWkt || null
+            }]
+        };
+        console.log(`[EXPORT] Payload relazionale GTFS generato -> ${payload.stops.length} fermate, corsa: ${tripId}`);
+        return payload;
     };
 
     // ----------------------------------
