@@ -5,7 +5,8 @@
     "jquery": true
   },
   "globals": {
-    "turf": "readonly"
+    "turf": "readonly",
+    "JSZip": "readonly"
   },
   "rules": {
     "no-unused-vars": "warn",
