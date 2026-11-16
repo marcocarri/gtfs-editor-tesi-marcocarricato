@@ -655,6 +655,10 @@
         // Reset modifica tratta button to disabled
         editRouteUri = null;
         editRouteColor = null;
+        editAgencyUri = null;
+        editAgencyName = null;
+        editRouteLongName = null;
+        editRouteLabel = null;
         const btnMod = container.querySelector('#btnModificaTratta');
         btnMod.disabled = true;
         btnMod.innerHTML = 'Modifica tratta';
@@ -734,6 +738,10 @@
 
         editLineName = lineName;
         editCurrentWkt = wktGeometry || null;
+        editRouteLabel = routeLabel || null;
+        editAgencyUri = meta.agencyUri || null;
+        editAgencyName = meta.agencyName || null;
+        editRouteLongName = meta.routeLongName || null;
         enableEditButton(routeUri, color);
 
         const tratteInfoDiv = container.querySelector('#tratteInfo');
@@ -1280,7 +1288,12 @@
                 dot.style.backgroundColor = lineData.lineColor;
                 btn.appendChild(dot);
                 btn.appendChild(document.createTextNode(r.routeLabel));
-                btn.onclick = () => handleTrattaClick(r.route, r.wktGeometry, lineData.lineColor, lineData.lineObj.busLine, r.routeLabel);
+                const matchedAgency = allAgencies.find(a => a.agency === lineData.agencyUri);
+                btn.onclick = () => handleTrattaClick(r.route, r.wktGeometry, lineData.lineColor, lineData.lineObj.busLine, r.routeLabel, {
+                    agencyUri: lineData.agencyUri,
+                    agencyName: matchedAgency?.name || null,
+                    routeLongName: lineData.lineObj.lineDesc
+                });
                 list.appendChild(btn);
             });
 
@@ -1294,7 +1307,7 @@
         }
     };
 
-    const handleAgencyLineClick = async (lineObj, agencyUri, lineColor) => {
+    const handleAgencyLineClick = async (lineObj, agencyUri, lineColor, agencyName = null) => {
         if (isLoading || appState !== 'idle') return;
 
         const signal = startNav();
@@ -1341,7 +1354,11 @@
 
                 const label = r.routeName || (r.firstBusStop && r.lastBusStop ? `${r.firstBusStop} → ${r.lastBusStop}` : 'Tratta');
                 btn.appendChild(document.createTextNode(label));
-                btn.onclick = () => handleTrattaClick(r.route, r.wktGeometry, lineColor, lineObj.busLine, label);
+                btn.onclick = () => handleTrattaClick(r.route, r.wktGeometry, lineColor, lineObj.busLine, label, {
+                    agencyUri: agencyUri,
+                    agencyName: agencyName,
+                    routeLongName: lineObj.longName
+                });
                 list.appendChild(btn);
 
                 drawRoutePath(r.route, r.wktGeometry, lineColor);
@@ -1788,7 +1805,7 @@
 
                 button.appendChild(dot);
                 button.appendChild(document.createTextNode(`Line ${line.shortName} - ${line.longName}`));
-                button.onclick = () => handleAgencyLineClick({ busLine: line.shortName }, agency.agency, lineColor);
+                button.onclick = () => handleAgencyLineClick({ busLine: line.shortName, longName: line.longName }, agency.agency, lineColor, agency.name);
                 linesList.appendChild(button);
             });
             switchTab('tabLines');
