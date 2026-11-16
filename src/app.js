@@ -473,6 +473,11 @@
         // deduplicate stops by sanitized stop_id to preserve GTFS primary key uniqueness
         const stopsMap = new Map();
         const stopTimesRows = [];
+        // ensure all stops have valid monotonic times even if exported before async timetable load finishes
+        const exportTimes = editStops.map((_, idx) => stopCurrentTimes[idx] || null);
+        if (exportTimes.some(t => t === null)) {
+            interpolateTimetable(editStops, exportTimes, 0, osmRouteCache);
+        }
         editStops.forEach((s, i) => {
             const nameEl = container.querySelector(`#editStopName-${i}`);
             const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
@@ -486,7 +491,7 @@
                     stop_lon: s.lng
                 });
             }
-            const rawTime = stopCurrentTimes[i] || '08:00';
+            const rawTime = exportTimes[i] || '08:00';
             const formattedTime = rawTime.length === 5 ? `${rawTime}:00` : rawTime;
             stopTimesRows.push({
                 trip_id: tripId,
@@ -510,7 +515,7 @@
                     const curr = turf.point([lon, lat]);
                     cumDistMeters += turf.distance(prev, curr, { units: 'meters' });
                 } catch (err) {
-                    console.warn('[EXPORT] Errore calcolo distanza vertice shape:', err);
+                    console.warn('[EXPORT] Errore calcolo distanza vertice shape ->', err);
                 }
             }
             return {
@@ -1691,10 +1696,10 @@
                 console.log(`[EXPORT] Archivio GTFS .zip scaricato -> ${fileName}`);
                 return;
             } catch (err) {
-                console.warn('[EXPORT] Errore generazione ZIP, attivo fallback JSON:', err);
+                console.warn('[EXPORT] Errore generazione ZIP, attivo fallback JSON ->', err);
             }
         } else {
-            console.warn('[EXPORT] JSZip non disponibile, attivo fallback JSON');
+            console.warn('[EXPORT] JSZip non disponibile -> attivo fallback JSON');
         }
         const jsonText = JSON.stringify(standardData, null, 2);
         const blob = new Blob([jsonText], { type: 'application/json' });
