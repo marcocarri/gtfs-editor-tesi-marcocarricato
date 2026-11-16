@@ -35,7 +35,7 @@ Per garantire la piena autonomia dell'Editor senza alterare file di sistema del 
 - Estrae passivamente i *waypoints* dall'URL della richiesta tramite espressioni regolari e sincronizza in tempo reale le coordinate di `editStops` nella memoria RAM con precisione standardizzata a 6 cifre decimali (~11 cm).
 
 ## Sviluppo e Build Pipeline (Tooling)
-Per garantire la manutenibilità, il codice sorgente è sviluppato in modo modulare (`/src` diviso in HTML, CSS e JS). Per il rilascio sulla piattaforma Snap4City, è stato ingegnerizzato uno script di build in **Node.js** (`build.js`). Eseguendo il comando `npm run build`, il sistema estrae il DOM, inietta le dipendenze esterne (jQuery, Turf.js) e unifica gli stili e gli script, generando automaticamente un **Single-File Component** (`dist/build_widget.html`) ottimizzato e pronto per l'ambiente operativo.
+Per garantire la manutenibilità, il codice sorgente è sviluppato in modo modulare (`/src` diviso in HTML, CSS e JS). Per il rilascio sulla piattaforma Snap4City, è stato ingegnerizzato uno script di build in **Node.js** (`build.js`). Eseguendo il comando `npm run build`, il sistema estrae il DOM, inietta le dipendenze esterne (jQuery, Turf.js, JSZip) e unifica gli stili e gli script, generando automaticamente un **Single-File Component** (`dist/bundle_widget.html`) ottimizzato e pronto per l'ambiente operativo.
 
 ### Setup Locale
 ```bash
@@ -76,11 +76,11 @@ A fronte dell'incompletezza informativa dei feed real-time (presenza di buchi te
 
 ## Esportazione Relazionale Standardizzata GTFS
 A valle delle modifiche cartografiche ed orarie, l'Editor offre un doppio canale di persistenza:
-1. **View JSON (KM4City Patch):** Generazione del payload gerarchico ad oggetti con pattern *Copy-on-Write* per ingestion diretta nel Knowledge Graph di Snap4City.
-2. **Export Standard (Strict-GTFS Relational):** Download diretto asincrono via Web API `Blob` di un dataset normalizzato 3NF (`agency`, `routes`, `trips`, `stops`, `stop_times`, `shapes`) conforme alle specifiche ufficiali GTFS:
-  - Orari formattati in standard esteso `HH:MM:SS`.
-  - Coordinate WGS84 standardizzate a 6 decimali.
-  - Piena integrità referenziale tra chiavi primarie e chiavi esterne (`trip_id`, `route_id`, `stop_id`, `shape_id`).
+1. **Save JSON (KM4City Patch):** Generazione del payload gerarchico ad oggetti con pattern *Copy-on-Write* per ingestion diretta nel Knowledge Graph di Snap4City (visualizzabile, copiabile o scaricabile da modale).
+2. **Export Standard (Strict-GTFS `.zip` Package):** Generazione client-side tramite `JSZip` e download diretto asincrono via Web API `Blob` di un archivio GTFS `.zip` standard (con fallback difensivo JSON), composto da 7 tabelle CSV RFC 4180 normalizzate 3NF (`agency.txt`, `calendar_dates.txt`, `routes.txt`, `trips.txt`, `stops.txt`, `stop_times.txt`, `shapes.txt`) compatibili con `gtfs-kit` e lo script di ingestion Snap4City `chouette-gtfs-n3.py`:
+- Orari formattati in standard esteso `HH:MM:SS` con monotonia temporale garantita.
+- Coordinate WGS84 standardizzate a 6 decimali e geometria `shapes.txt` esplosa per vertici ordinati con `shape_dist_traveled` progressivo in metri.
+- Sanitizzazione degli URI KM4City in identificatori GTFS RDF-safe, deduplicazione delle fermate su `stops.txt` e piena integrità referenziale tra chiavi primarie ed esterne (`agency_id`, `service_id`, `route_id`, `trip_id`, `stop_id`, `shape_id`).
 
 ## Roadmap Sviluppo (GitFlow)
 - [x] **Fase 1**: Refactoring esportazione dati (Strict GTFS / KM4City Ingestion Payload).
@@ -89,4 +89,3 @@ A valle delle modifiche cartografiche ed orarie, l'Editor offre un doppio canale
 - [x] **Fase 4**: Esportazione relazionale standardizzata GTFS.
 - [ ] **Fase 5**: Modulo di calcolo della matrice di coincidenza temporale.
 - [ ] **Fase 6**: Salvataggio e trasmissione dati al backend.
-```
