@@ -1,4 +1,4 @@
-/* global turf, $, parent, document, window, fetch, URLSearchParams, Blob, navigator */
+/* global turf, $, parent, document, window, fetch, URLSearchParams, Blob, navigator, JSZip */
 
 (async function () {
     const container = document.getElementById('busmap-container');
@@ -23,6 +23,17 @@
     let pendingTimeUpdateCallback = null; // set by commit(); called by time update modal buttons
     let navAbortController = null; // aborted at the start of each navigation action to cancel stale fetches
     let isLoading = false; // true while any async nav operation is in-flight
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS - START -
+    // ----------------------------------
+    let editAgencyUri = null;
+    let editAgencyName = null;
+    let editRouteLongName = null;
+    let editRouteLabel = null;
+    // ----------------------------------
+    // - CUSTOM MODULES: THESIS -  END  -
+    // ----------------------------------
+
 
     // 'idle' | 'stop_selected' | 'line_selected' | 'tratta_selected'
     let appState = 'idle';
@@ -37,7 +48,6 @@
     // ----------------------------------
     // - CUSTOM MODULES: THESIS - START -
     // ----------------------------------
-
     // automatically inspects S4C dashboard to find the unique ID of the map widget
     const detectMapWidgetId = () => {
         // default fallback ID, manually updated for every new dashboard
@@ -62,7 +72,6 @@
 
     // global destination constant for all jQuery calls to the Event Bus
     const MAP_WIDGET_TARGET = detectMapWidgetId();
-
     // ----------------------------------
     // - CUSTOM MODULES: THESIS -  END  -
     // ----------------------------------
@@ -76,7 +85,6 @@
     // ----------------------------------
     // - CUSTOM MODULES: THESIS - START -
     // ----------------------------------
-
     // intercepts routing calls from map and extracts the updated waypoints without dependencies from the S4C platform
     const targetWindow = parent.window || window;
     const nativeFetch = targetWindow.fetch;
@@ -412,59 +420,145 @@
         };
     };
 
-    // save & export GTFS-normalized json document
+    // sanitizes KM4City URIs or raw strings into RDF-safe GTFS identifiers
+    const sanitizeGtfsId = (rawId, fallback = 'UNKNOWN') => {
+        if (!rawId) return fallback;
+        const str = String(rawId);
+        const tail = str.includes('/') ? str.substring(str.lastIndexOf('/') + 1) : str;
+        const clean = tail.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+        return clean || fallback;
+    };
+
+    // parses a WKT LINESTRING into an array of [lon, lat] WGS84 coordinates
+    const parseWktLineString = (wktString) => {
+        if (!wktString || typeof wktString !== 'string') return [];
+        const match = wktString.match(/LINESTRING\s*\(\s*([^)]+)\s*\)/i);
+        if (!match || !match[1]) return [];
+        return match[1].split(',').map(pair => {
+            const parts = pair.trim().split(/\s+/).map(Number);
+            if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                return [parseFloat(parts[0].toFixed(6)), parseFloat(parts[1].toFixed(6))];
+            }
+            return null;
+        }).filter(Boolean);
+    };
+
+    // serializes an array of objects into an RFC 4180 compliant CSV string
+    const toCsv = (rows, columns) => {
+        const escapeCell = (val) => {
+            if (val === null || val === undefined) return '';
+            const str = String(val);
+            if (/[",\n\r]/.test(str)) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        };
+        const header = columns.join(',');
+        const body = rows.map(row => columns.map(col => escapeCell(row[col])).join(','));
+        return [header, ...body].join('\n');
+    };
+
+    // save & export GTFS-normalized 3NF relational dataset
     const buildStandardizedPayload = () => {
         const timestamp = new Date().getTime();
-        const tripId = `${editRouteUri}_TRIP_${timestamp}`;
-        const shapeId = `${editRouteUri}_SHAPE_${timestamp}`;
-        const routeId = editRouteUri;
+        const todayYmd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const serviceId = 'SRV_DEFAULT';
+        const agencyId = sanitizeGtfsId(editAgencyUri, 'AGENCY_1');
+        const agencyObj = allAgencies.find(a => a.agency === editAgencyUri);
+        const agencyName = editAgencyName || agencyObj?.name || 'Snap4City TPL Agency';
+        const routeId = sanitizeGtfsId(editRouteUri, `ROUTE_${timestamp}`);
+        const tripId = `${routeId}_TRIP_${timestamp}`;
+        const shapeId = `${routeId}_SHAPE_${timestamp}`;
         const cleanColor = editRouteColor ? editRouteColor.replace('#', '').toUpperCase() : '007BFF';
+        // deduplicate stops by sanitized stop_id to preserve GTFS primary key uniqueness
+        const stopsMap = new Map();
+        const stopTimesRows = [];
+        editStops.forEach((s, i) => {
+            const nameEl = container.querySelector(`#editStopName-${i}`);
+            const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
+            const stopId = sanitizeGtfsId(s.serviceUri, `TEMP_STOP_${i + 1}`);
+            if (!stopsMap.has(stopId)) {
+                stopsMap.set(stopId, {
+                    stop_id: stopId,
+                    stop_code: stopId,
+                    stop_name: currentName || `Fermata ${i + 1}`,
+                    stop_lat: s.lat,
+                    stop_lon: s.lng
+                });
+            }
+            const rawTime = stopCurrentTimes[i] || '08:00';
+            const formattedTime = rawTime.length === 5 ? `${rawTime}:00` : rawTime;
+            stopTimesRows.push({
+                trip_id: tripId,
+                arrival_time: formattedTime,
+                departure_time: formattedTime,
+                stop_id: stopId,
+                stop_sequence: i + 1,
+                shape_dist_traveled: s.shape_dist_traveled !== undefined ? s.shape_dist_traveled : ''
+            });
+        });
+        // explode WKT LINESTRING into tabular GTFS shapes rows with cumulative meters
+        let shapeCoords = parseWktLineString(editCurrentWkt);
+        if (shapeCoords.length < 2) {
+            shapeCoords = editStops.map(s => [s.lng, s.lat]);
+        }
+        let cumDistMeters = 0;
+        const shapesRows = shapeCoords.map(([lon, lat], idx) => {
+            if (idx > 0 && typeof turf !== 'undefined') {
+                try {
+                    const prev = turf.point(shapeCoords[idx - 1]);
+                    const curr = turf.point([lon, lat]);
+                    cumDistMeters += turf.distance(prev, curr, { units: 'meters' });
+                } catch (err) {
+                    console.warn('[EXPORT] Errore calcolo distanza vertice shape:', err);
+                }
+            }
+            return {
+                shape_id: shapeId,
+                shape_pt_lat: lat,
+                shape_pt_lon: lon,
+                shape_pt_sequence: idx + 1,
+                shape_dist_traveled: parseFloat(cumDistMeters.toFixed(2))
+            };
+        });
         const payload = {
-            agency: allAgencies,
+            agency: [{
+                agency_id: agencyId,
+                agency_name: agencyName,
+                agency_url: 'https://www.snap4city.org',
+                agency_timezone: 'Europe/Rome',
+                agency_lang: 'it'
+            }],
+            calendar_dates: [{
+                service_id: serviceId,
+                date: todayYmd,
+                exception_type: 1
+            }],
             routes: [{
                 route_id: routeId,
-                route_short_name: editLineName,
-                route_type: 3, // 3 - bus type in GTFS
-                route_color: cleanColor
+                agency_id: agencyId,
+                route_short_name: editLineName || routeId,
+                route_long_name: editRouteLongName || editRouteLabel || editLineName || 'Linea TPL',
+                route_type: 3,
+                route_color: cleanColor,
+                route_text_color: 'FFFFFF'
             }],
             trips: [{
                 route_id: routeId,
+                service_id: serviceId,
                 trip_id: tripId,
-                shape_id: shapeId,
-                direction_id: 0
+                trip_headsign: editRouteLabel || editRouteLongName || editLineName || 'Capolinea',
+                trip_short_name: editLineName || '',
+                direction_id: 0,
+                shape_id: shapeId
             }],
-            stops: editStops.map((s, i) => {
-                const nameEl = container.querySelector(`#editStopName-${i}`);
-                const currentName = nameEl ? (nameEl.textContent || nameEl.value || s.name) : s.name;
-                return {
-                    stop_id: s.serviceUri || `TEMP_STOP_${i + 1}`,
-                    stop_name: currentName,
-                    stop_lat: s.lat,
-                    stop_lon: s.lng
-                };
-            }),
-            stop_times: editStops.map((s, i) => {
-                // standard time formatting
-                const rawTime = stopCurrentTimes[i];
-                const formattedTime = rawTime ? (rawTime.length === 5 ? `${rawTime}:00` : rawTime) : null;
-                return {
-                    trip_id: tripId,
-                    stop_sequence: i + 1,
-                    stop_id: s.serviceUri || `TEMP_STOP_${i + 1}`,
-                    arrival_time: formattedTime,
-                    departure_time: formattedTime,
-                    shape_dist_traveled: s.shape_dist_traveled !== undefined ? s.shape_dist_traveled : null
-                };
-            }),
-            shapes: [{
-                shape_id: shapeId,
-                wkt_geometry: editCurrentWkt || null
-            }]
+            stops: Array.from(stopsMap.values()),
+            stop_times: stopTimesRows,
+            shapes: shapesRows
         };
-        console.log(`[EXPORT] Payload relazionale GTFS generato -> ${payload.stops.length} fermate, corsa: ${tripId}`);
+        console.log(`[EXPORT] Payload relazionale GTFS generato -> ${payload.stops.length} fermate, ${payload.shapes.length} vertici shape, corsa: ${tripId}`);
         return payload;
     };
-
     // ----------------------------------
     // - CUSTOM MODULES: THESIS -  END  -
     // ----------------------------------
@@ -1553,20 +1647,48 @@
     // ----------------------------------
     // - CUSTOM MODULES: THESIS - START -
     // ----------------------------------
-    const handleDirectExport = () => {
+    const handleDirectExport = async () => {
         const standardData = buildStandardizedPayload();
+        const dateTag = new Date().toISOString().slice(0, 10);
+        const lineTag = sanitizeGtfsId(editLineName, 'export');
+        if (typeof JSZip !== 'undefined') {
+            try {
+                const zip = new JSZip();
+                zip.file('agency.txt', toCsv(standardData.agency, ['agency_id', 'agency_name', 'agency_url', 'agency_timezone', 'agency_lang']));
+                zip.file('calendar_dates.txt', toCsv(standardData.calendar_dates, ['service_id', 'date', 'exception_type']));
+                zip.file('routes.txt', toCsv(standardData.routes, ['route_id', 'agency_id', 'route_short_name', 'route_long_name', 'route_type', 'route_color', 'route_text_color']));
+                zip.file('trips.txt', toCsv(standardData.trips, ['route_id', 'service_id', 'trip_id', 'trip_headsign', 'trip_short_name', 'direction_id', 'shape_id']));
+                zip.file('stops.txt', toCsv(standardData.stops, ['stop_id', 'stop_code', 'stop_name', 'stop_lat', 'stop_lon']));
+                zip.file('stop_times.txt', toCsv(standardData.stop_times, ['trip_id', 'arrival_time', 'departure_time', 'stop_id', 'stop_sequence', 'shape_dist_traveled']));
+                zip.file('shapes.txt', toCsv(standardData.shapes, ['shape_id', 'shape_pt_lat', 'shape_pt_lon', 'shape_pt_sequence', 'shape_dist_traveled']));
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                const fileName = `gtfs_${lineTag}_${dateTag}.zip`;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                console.log(`[EXPORT] Archivio GTFS .zip scaricato -> ${fileName}`);
+                return;
+            } catch (err) {
+                console.warn('[EXPORT] Errore generazione ZIP, attivo fallback JSON:', err);
+            }
+        } else {
+            console.warn('[EXPORT] JSZip non disponibile, attivo fallback JSON');
+        }
         const jsonText = JSON.stringify(standardData, null, 2);
         const blob = new Blob([jsonText], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const fileName = `gtfs_relazionale_${editLineName || 'export'}_${new Date().toISOString().slice(0, 10)}.json`;
-        a.download = fileName;
+        a.download = `gtfs_relazionale_${lineTag}_${dateTag}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        console.log(`[EXPORT] Download diretto completato -> file: ${fileName}`);
     };
 
     container.querySelector('#btnDirectExport').addEventListener('click', handleDirectExport);
@@ -1680,7 +1802,6 @@
     // ----------------------------------
     // - CUSTOM MODULES: THESIS - START -
     // ----------------------------------
-
     parent.document.addEventListener('trattaRouteUpdated', (e) => {
         if (!editMode) return;
         showEditError(null);
@@ -1707,7 +1828,6 @@
             drawRoutePath(editRouteUri, e.detail.wkt, editRouteColor);
         }, 150);
     });
-
     // ----------------------------------
     // - CUSTOM MODULES: THESIS -  END  -
     // ----------------------------------
