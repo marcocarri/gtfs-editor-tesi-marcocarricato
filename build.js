@@ -33,9 +33,10 @@ widgetHtml = widgetHtml.replace(/<script src="app\.js"><\/script>/g, '');
 // reinserimento forzato delle dipendenze esterne
 const jqueryImport = '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>\n';
 const turfImport = '<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>\n';
+const JSZipImport = '<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>\n';
 
 // assemblaggio del file unico con l'integrazione di style.css e app.js
-const bundleContent = `${jqueryImport}${turfImport}
+const bundleContent = `${jqueryImport}${turfImport}${JSZipImport}
 ${widgetHtml}
 <style>
 ${css}

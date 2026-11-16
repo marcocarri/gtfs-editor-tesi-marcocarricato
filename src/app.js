@@ -725,7 +725,7 @@
         btn.style.opacity = '1';
     };
 
-    const handleTrattaClick = async (routeUri, wktGeometry, color, lineName = null, routeLabel = '') => {
+    const handleTrattaClick = async (routeUri, wktGeometry, color, lineName = null, routeLabel = '', meta = {}) => {
         if (isLoading || appState !== 'line_selected') return;
         if (editMode) exitEditMode();
 
